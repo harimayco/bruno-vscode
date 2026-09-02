@@ -192,44 +192,42 @@ const StyledWrapper = styled.div`
     }
 
     .method-badge {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 1px 6px;
-      border-radius: 3px;
-      min-width: 44px;
-      text-align: center;
+      font-size: ${(props) => props.theme?.font?.size?.xs || '0.6875rem'};
+      font-weight: 500;
+      min-width: 36px;
+      text-align: left;
       text-transform: uppercase;
       flex-shrink: 0;
 
-      &.get {
-        background-color: rgba(59, 130, 246, 0.15);
-        color: #60a5fa;
-        border: 1px solid rgba(59, 130, 246, 0.3);
+      &.method-get {
+        color: ${(props) => props.theme?.request?.methods?.get || '#4ec9b0'};
       }
-      &.post {
-        background-color: rgba(34, 197, 94, 0.15);
-        color: #4ade80;
-        border: 1px solid rgba(34, 197, 94, 0.3);
+      &.method-post {
+        color: ${(props) => props.theme?.request?.methods?.post || '#569cd6'};
       }
-      &.put {
-        background-color: rgba(245, 158, 11, 0.15);
-        color: #fbbf24;
-        border: 1px solid rgba(245, 158, 11, 0.3);
+      &.method-put {
+        color: ${(props) => props.theme?.request?.methods?.put || '#ce9178'};
       }
-      &.delete {
-        background-color: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        border: 1px solid rgba(239, 68, 68, 0.3);
+      &.method-delete {
+        color: ${(props) => props.theme?.request?.methods?.delete || '#f14c4c'};
       }
-      &.patch {
-        background-color: rgba(168, 85, 247, 0.15);
-        color: #c084fc;
-        border: 1px solid rgba(168, 85, 247, 0.3);
+      &.method-patch {
+        color: ${(props) => props.theme?.request?.methods?.patch || '#dcdcaa'};
       }
-      &.options, &.head {
-        background-color: rgba(156, 163, 175, 0.15);
-        color: #9ca3af;
-        border: 1px solid rgba(156, 163, 175, 0.3);
+      &.method-options {
+        color: ${(props) => props.theme?.request?.methods?.options || '#4fc1ff'};
+      }
+      &.method-head {
+        color: ${(props) => props.theme?.request?.methods?.head || '#9cdcfe'};
+      }
+      &.method-grpc {
+        color: ${(props) => props.theme?.request?.grpc || '#4fc1ff'};
+      }
+      &.method-ws {
+        color: ${(props) => props.theme?.request?.ws || '#ce9178'};
+      }
+      &.method-graphql {
+        color: ${(props) => props.theme?.request?.gql || '#c586c0'};
       }
     }
 

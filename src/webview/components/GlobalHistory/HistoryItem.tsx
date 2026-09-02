@@ -12,7 +12,6 @@ import {
 } from '@tabler/icons';
 import { deleteHistoryEntry, recordHistoryEntry } from 'providers/ReduxStore/slices/history';
 import { addTransientRequest } from 'providers/ReduxStore/slices/collections';
-import { openRequestInVSCodeEditor } from 'utils/webviewMode';
 import { transientManager } from 'utils/transient-manager';
 import { ipcRenderer } from 'utils/ipc';
 import { buildHarRequest } from 'utils/codegenerator/har';
@@ -20,7 +19,6 @@ import { HTTPSnippet } from 'httpsnippet';
 import toast from 'react-hot-toast';
 import { sendNetworkRequest } from 'utils/network';
 import MenuDropdown from 'ui/MenuDropdown';
-import ActionIcon from 'ui/ActionIcon';
 import HistoryDetailsModal from './HistoryDetailsModal';
 import SaveToCollectionModal from './SaveToCollectionModal';
 
@@ -28,17 +26,17 @@ interface HistoryItemProps {
   entry: HistoryEntry;
 }
 
+const getMethodText = (method = '') => {
+  const m = (method || 'GET').toUpperCase();
+  return m.length > 5 ? m.substring(0, 3) : m;
+};
+
 const getStatusClass = (status?: number, isError?: boolean) => {
   if (isError || !status || status === 0) return 's-err';
   if (status >= 200 && status < 300) return 's-2xx';
   if (status >= 300 && status < 400) return 's-3xx';
   if (status >= 400 && status < 500) return 's-4xx';
   return 's-5xx';
-};
-
-const isTransientPath = (p?: string): boolean => {
-  if (!p) return true;
-  return p.includes('.bruno/transient') || p.includes('.bruno\\transient');
 };
 
 const formatTime = (timestamp: number) => {
@@ -58,6 +56,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
   const menuDropdownRef = useRef<any>(null);
 
   const method = (entry.request.method || 'GET').toLowerCase();
+  const methodText = getMethodText(entry.request.method || 'GET');
   const status = entry.response?.status;
   const isError = Boolean(entry.response?.error);
 
@@ -121,13 +120,6 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
   const handleRowClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // 1. If this request belongs to an actual saved file on disk, open it in VS Code custom editor
-    if (entry.source?.itemPath && !isTransientPath(entry.source.itemPath)) {
-      openRequestInVSCodeEditor(entry.source.itemPath);
-      return;
-    }
-
-    // 2. Otherwise (untitled / transient / unsaved request), open as a transient request in editor tab
     const collection = collections.find((c: any) => c.uid === entry.source?.collectionUid) || collections[0];
     if (!collection) {
       toast.error('Please open or create a collection first to edit requests in editor');
@@ -135,17 +127,20 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
     }
 
     const transientItem = transientManager.createHttpRequest(collection);
-    if (entry.source?.itemName && !entry.source.itemName.startsWith('Untitled')) {
-      transientItem.name = entry.source.itemName;
-    }
+    
+    // Set tab name from URL (or fallback)
+    const urlName = entry.request?.url?.trim() || 'Untitled Request';
+    transientItem.name = urlName;
+
+    // Load exact snapshot data from history
     transientItem.request = {
       ...transientItem.request,
-      url: entry.request.url,
-      method: entry.request.method,
-      headers: Array.isArray(entry.request.headers) ? entry.request.headers : [],
-      params: entry.request.params || [],
-      body: entry.request.body || { mode: 'none' },
-      auth: entry.request.auth || {}
+      url: entry.request?.url || '',
+      method: entry.request?.method || 'GET',
+      headers: Array.isArray(entry.request?.headers) ? entry.request.headers : [],
+      params: entry.request?.params || [],
+      body: entry.request?.body || { mode: 'none' },
+      auth: entry.request?.auth || {}
     };
 
     dispatch(addTransientRequest({ collectionUid: collection.uid, item: transientItem }));
@@ -228,7 +223,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
         data-testid="history-item-card"
       >
         <div className="item-main">
-          <span className={`method-badge ${method}`}>{entry.request.method}</span>
+          <span className={`method-badge method-${method}`}>{methodText}</span>
 
           <span className="url-text" title={entry.request.url}>
             {entry.request.url || '/'}
@@ -265,12 +260,14 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
             ref={menuDropdownRef}
             items={menuItems}
             placement="bottom-end"
+            offset={[0, 2]}
+            appendTo={() => document.body}
             popperOptions={{ strategy: 'fixed' }}
             onChange={setIsMenuOpen}
           >
-            <ActionIcon className="action-btn" label="More actions">
+            <button className="action-btn" title="More actions" type="button">
               <IconDots size={16} />
-            </ActionIcon>
+            </button>
           </MenuDropdown>
         </div>
       </div>
