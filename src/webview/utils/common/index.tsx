@@ -296,20 +296,26 @@ export const formatResponse = (
   filter: string | null | undefined,
   bufferThreshold = LARGE_BUFFER_THRESHOLD
 ): string => {
-  if (data === undefined || !dataBufferString || !mode) {
+  if (data === undefined && !dataBufferString) {
     return '';
   }
 
+  const effectiveMode = mode || 'json';
+
   let bufferSize = 0, rawData = '', isVeryLargeResponse = false;
-  try {
-    const dataBuffer = Buffer.from(dataBufferString, 'base64');
-    bufferSize = dataBuffer.length;
-    isVeryLargeResponse = bufferSize > bufferThreshold;
-    if (!isVeryLargeResponse) {
-      rawData = dataBuffer.toString();
+  if (dataBufferString) {
+    try {
+      const dataBuffer = Buffer.from(dataBufferString, 'base64');
+      bufferSize = dataBuffer.length;
+      isVeryLargeResponse = bufferSize > bufferThreshold;
+      if (!isVeryLargeResponse) {
+        rawData = dataBuffer.toString();
+      }
+    } catch (error) {
+      console.warn('Failed to calculate buffer size:', error);
     }
-  } catch (error) {
-    console.warn('Failed to calculate buffer size:', error);
+  } else if (data !== undefined && data !== null) {
+    rawData = typeof data === 'string' ? data : (safeStringifyJSON(data, true) ?? String(data));
   }
 
   if (mode.includes('json')) {

@@ -11,6 +11,19 @@ export function setHistoryExtensionContext(context: vscode.ExtensionContext): vo
 }
 
 export class HistoryStore {
+  private getMaxItems(): number {
+    try {
+      if (typeof vscode !== 'undefined' && vscode.workspace?.getConfiguration) {
+        const config = vscode.workspace.getConfiguration('bruno.history');
+        const max = config.get<number>('maxItems', MAX_HISTORY_ITEMS);
+        return typeof max === 'number' && max > 0 ? max : MAX_HISTORY_ITEMS;
+      }
+      return MAX_HISTORY_ITEMS;
+    } catch {
+      return MAX_HISTORY_ITEMS;
+    }
+  }
+
   private getFromStorage<T>(key: string, defaultValue: T): T {
     if (!extensionContext) {
       return defaultValue;
@@ -31,7 +44,8 @@ export class HistoryStore {
   }
 
   saveHistory(entries: HistoryEntry[]): HistoryEntry[] {
-    const validEntries = Array.isArray(entries) ? entries.slice(0, MAX_HISTORY_ITEMS) : [];
+    const maxItems = this.getMaxItems();
+    const validEntries = Array.isArray(entries) ? entries.slice(0, maxItems) : [];
     this.setInStorage(STORAGE_KEY, validEntries);
     return validEntries;
   }
@@ -40,10 +54,11 @@ export class HistoryStore {
     if (!entry || !entry.id) {
       return this.getHistory();
     }
+    const maxItems = this.getMaxItems();
     const current = this.getHistory();
     // Remove if already exists (deduplicate / move to top)
     const filtered = current.filter((e) => e.id !== entry.id);
-    const updated = [entry, ...filtered].slice(0, MAX_HISTORY_ITEMS);
+    const updated = [entry, ...filtered].slice(0, maxItems);
     this.setInStorage(STORAGE_KEY, updated);
     return updated;
   }

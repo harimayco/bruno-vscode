@@ -814,6 +814,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
                   size: typeof response.size === 'number' ? response.size : 0,
                   headers: response.headers as Record<string, unknown> | undefined,
                   data: response.data,
+                  dataBuffer: typeof response.dataBuffer === 'string' ? response.dataBuffer : undefined,
                   error: null
                 },
                 source: {

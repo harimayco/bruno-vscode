@@ -66,6 +66,7 @@ export interface HistoryEntryResponse {
   size?: number;
   headers?: Record<string, unknown>;
   data?: unknown;
+  dataBuffer?: string;
   error?: string | null;
   [key: string]: unknown;
 }

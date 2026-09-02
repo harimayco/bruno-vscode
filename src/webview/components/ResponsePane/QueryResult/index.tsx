@@ -49,13 +49,9 @@ export const useInitialResponseFormat = (dataBuffer: unknown, headers: unknown):
     const detectedContentType = detectContentTypeFromBase64(dataBuffer);
     const contentType = getContentType(headers as Record<string, string>);
 
-    // Wait until both content types are available
-    if (detectedContentType === null || contentType === undefined) {
-      return { initialFormat: null, initialTab: null };
-    }
-
-    const initial = getDefaultResponseFormat(contentType);
-    return { initialFormat: initial.format, initialTab: initial.tab };
+    const typeToUse = contentType || detectedContentType || 'application/json';
+    const initial = getDefaultResponseFormat(typeToUse);
+    return { initialFormat: initial.format || 'json', initialTab: initial.tab || 'editor' };
   }, [dataBuffer, headers]);
 };
 

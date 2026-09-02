@@ -1593,7 +1593,10 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (collection) {
         collection.items = collection.items || [];
-        if (!collection.items.some((i: any) => i.uid === item.uid)) {
+        const existingIndex = collection.items.findIndex((i: any) => i.uid === item.uid);
+        if (existingIndex >= 0) {
+          collection.items[existingIndex] = item;
+        } else {
           collection.items.push(item);
         }
       }

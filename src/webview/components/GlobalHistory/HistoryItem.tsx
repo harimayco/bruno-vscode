@@ -128,6 +128,10 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
 
     const transientItem = transientManager.createHttpRequest(collection);
     
+    // Deterministic UID linked to this history entry so clicking it again reveals the existing unsaved tab
+    const itemUid = `history-${entry.id}`;
+    transientItem.uid = itemUid;
+
     // Set tab name from URL (or fallback)
     const urlName = entry.request?.url?.trim() || 'Untitled Request';
     transientItem.name = urlName;
@@ -142,6 +146,32 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
       body: entry.request?.body || { mode: 'none' },
       auth: entry.request?.auth || {}
     };
+
+    // Load snapshot response from history so result pane immediately displays the previous execution result
+    if (entry.response) {
+      let dataBuffer = (entry.response as any).dataBuffer;
+      if (!dataBuffer && entry.response.data !== undefined && entry.response.data !== null) {
+        try {
+          const str = typeof entry.response.data === 'string'
+            ? entry.response.data
+            : JSON.stringify(entry.response.data);
+          dataBuffer = Buffer.from(str).toString('base64');
+        } catch {
+          dataBuffer = '';
+        }
+      }
+
+      (transientItem as any).response = {
+        status: entry.response.status,
+        statusText: entry.response.statusText,
+        duration: entry.response.duration,
+        size: entry.response.size,
+        headers: entry.response.headers,
+        data: entry.response.data,
+        dataBuffer: dataBuffer,
+        error: entry.response.error
+      };
+    }
 
     dispatch(addTransientRequest({ collectionUid: collection.uid, item: transientItem }));
     ipcRenderer.send('sidebar:open-transient-request', {
