@@ -80,29 +80,30 @@ const GenerateCodeItem = ({ item, collection }: GenerateCodeItemProps) => {
       const requestTreePath = getTreePathFromCollectionToItem(collection, item);
       const mergedHeaders = mergeHeaders(collection, request, requestTreePath);
 
-      const authHeaders = getAuthHeaders(undefined, resolvedRequest.auth);
+      const authHeaders = getAuthHeaders(undefined, resolvedRequest?.auth);
       const headers = [...mergedHeaders, ...authHeaders];
 
-      let url = request.url;
+      let url = request.url || '';
       if (shouldInterpolate) {
         const variables = getAllVariables(collection, item);
         url = interpolateUrl({ url, variables }) ?? url;
       }
       url = interpolateUrlPathParams(url, request.params || []);
 
-      const harRequest = buildHarRequest({
+      const { har, unhash } = buildHarRequest({
         request: {
           url,
           method: request.method,
           body: request.body,
           params: request.params,
-          auth: resolvedRequest.auth
+          auth: resolvedRequest?.auth
         },
         headers
       });
 
-      const httpSnippet = new HTTPSnippet(harRequest);
-      return httpSnippet.convert(activeLanguage.target, activeLanguage.client) as string;
+      const httpSnippet = new HTTPSnippet(har);
+      const converted = httpSnippet.convert(activeLanguage.target, activeLanguage.client) as string;
+      return unhash ? unhash(converted) : converted;
     } catch (error) {
       return `// Could not generate a snippet for this request.\n// ${(error as Error).message}`;
     }
