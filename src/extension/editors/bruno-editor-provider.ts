@@ -426,6 +426,10 @@ export class BrunoEditorProvider implements vscode.CustomTextEditorProvider {
         vscode.commands.executeCommand('bruno.openGlobalEnvironments');
         break;
 
+      case 'sidebar:open-global-history':
+        vscode.commands.executeCommand('bruno.openGlobalHistory');
+        break;
+
       case 'open-in-text-editor':
         vscode.commands.executeCommand('bruno.switchToTextEditor');
         break;

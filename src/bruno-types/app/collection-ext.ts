@@ -40,6 +40,54 @@ export interface TimelineEntry {
   };
 }
 
+export interface HistoryEntryRequest {
+  url: string;
+  method: string;
+  headers?: Array<{ name: string; value: string; enabled?: boolean }> | Record<string, string>;
+  params?: Array<{ name: string; value: string; enabled?: boolean; type?: string }>;
+  body?: {
+    mode?: string;
+    json?: unknown;
+    text?: string;
+    xml?: string;
+    formUrlEncoded?: Array<{ name: string; value: string; enabled?: boolean }>;
+    multipartForm?: Array<{ name: string; value: string; enabled?: boolean; type?: string }>;
+    graphql?: unknown;
+    [key: string]: unknown;
+  };
+  auth?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface HistoryEntryResponse {
+  status?: number;
+  statusText?: string;
+  duration?: number;
+  size?: number;
+  headers?: Record<string, unknown>;
+  data?: unknown;
+  error?: string | null;
+  [key: string]: unknown;
+}
+
+export interface HistoryEntrySource {
+  collectionUid?: string;
+  collectionName?: string;
+  collectionPath?: string;
+  itemUid?: string;
+  itemName?: string;
+  itemPath?: string;
+}
+
+export interface HistoryEntry {
+  id: string;
+  timestamp: number;
+  request: HistoryEntryRequest;
+  response?: HistoryEntryResponse;
+  source?: HistoryEntrySource;
+}
+
+
 export interface RunnerConfiguration {
   recursive?: boolean;
   delay?: number;

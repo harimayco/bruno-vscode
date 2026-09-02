@@ -23,14 +23,18 @@ const TARGET_TO_CM_MODE: Record<string, string> = {
   node: 'javascript',
   javascript: 'javascript',
   python: 'python',
-  java: 'clike',
-  csharp: 'clike',
+  java: 'text/x-java',
+  csharp: 'text/x-csharp',
   go: 'go',
   php: 'php',
   ruby: 'ruby',
-  swift: 'clike',
-  kotlin: 'clike',
-  objc: 'clike'
+  swift: 'swift',
+  kotlin: 'text/x-kotlin',
+  objc: 'text/x-objectivec',
+  c: 'text/x-csrc',
+  powershell: 'powershell',
+  r: 'r',
+  rust: 'rust'
 };
 
 interface GenerateCodeItemProps {

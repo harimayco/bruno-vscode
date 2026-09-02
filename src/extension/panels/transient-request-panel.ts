@@ -248,6 +248,9 @@ export async function openTransientRequestPanel(
         if (channel === 'sidebar:open-global-environments') {
           vscode.commands.executeCommand('bruno.openGlobalEnvironments');
         }
+        if (channel === 'sidebar:open-global-history') {
+          vscode.commands.executeCommand('bruno.openGlobalHistory');
+        }
         // Handle save transient request — args[0] is the serialized item data
         if (channel === 'transient:save-request' && args?.[0]) {
           await saveTransientRequest(panel, itemUid, collectionPath, args[0] as Record<string, unknown>);
