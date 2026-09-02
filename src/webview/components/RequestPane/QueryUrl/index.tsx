@@ -362,30 +362,32 @@ const QueryUrl = ({
       </div>
       <div
         id="request-url"
-        className="h-full w-full flex flex-row input-container"
+        className="h-full w-full flex flex-row flex-1 min-w-0 items-center overflow-hidden input-container"
       >
-        <SingleLineEditor
-          ref={editorRef}
-          value={url}
-          placeholder="Enter URL or paste a cURL request"
-          onSave={onSave}
-          theme={storedTheme}
-          onChange={(newValue: any) => onUrlChange(newValue)}
-          onRun={handleRun}
-          onPaste={item.type === 'http-request' ? handleHttpPaste : item.type === 'graphql-request' ? handleGraphqlPaste : undefined}
-          collection={collection}
-          highlightPathParams={true}
-          item={item}
-          showNewlineArrow={true}
-        />
+        <div className="flex-1 min-w-0 h-full overflow-hidden editor-wrapper">
+          <SingleLineEditor
+            ref={editorRef}
+            value={url}
+            placeholder="Enter URL or paste a cURL request"
+            onSave={onSave}
+            theme={storedTheme}
+            onChange={(newValue: any) => onUrlChange(newValue)}
+            onRun={handleRun}
+            onPaste={item.type === 'http-request' ? handleHttpPaste : item.type === 'graphql-request' ? handleGraphqlPaste : undefined}
+            collection={collection}
+            highlightPathParams={true}
+            item={item}
+            showNewlineArrow={true}
+          />
+        </div>
 
-        <div className="flex items-center h-full mr-2 cursor-pointer" id="send-request" onClick={handleRun}>
+        <div className="flex items-center h-full mr-2 cursor-pointer flex-shrink-0" id="send-request" onClick={handleRun}>
           {['http-request', 'graphql-request'].includes(item.type) ? (
             <GenerateCodeItem item={item} collection={collection} />
           ) : null}        
           <div
             title="Save Request"
-            className="infotip mr-3"
+            className="infotip mr-3 flex-shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               if (!hasChanges) return;
@@ -402,22 +404,24 @@ const QueryUrl = ({
               Save <span className="shortcut">({saveShortcut})</span>
             </span>
           </div>
-          {isLoading || item.response?.stream?.running ? (
-            <IconSquareRoundedX
-              color={theme.requestTabPanel.url.iconDanger}
-              strokeWidth={1.5}
-              size={20}
-              data-testid="cancel-request-icon"
-              onClick={handleCancelRequest}
-            />
-          ) : (
-            <IconArrowRight
-              color={theme.requestTabPanel.url.icon}
-              strokeWidth={1.5}
-              size={20}
-              data-testid="send-arrow-icon"
-            />
-          )}
+          <div className="flex-shrink-0 flex items-center">
+            {isLoading || item.response?.stream?.running ? (
+              <IconSquareRoundedX
+                color={theme.requestTabPanel.url.iconDanger}
+                strokeWidth={1.5}
+                size={20}
+                data-testid="cancel-request-icon"
+                onClick={handleCancelRequest}
+              />
+            ) : (
+              <IconArrowRight
+                color={theme.requestTabPanel.url.icon}
+                strokeWidth={1.5}
+                size={20}
+                data-testid="send-arrow-icon"
+              />
+            )}
+          </div>
         </div>
       </div>
     </StyledWrapper>

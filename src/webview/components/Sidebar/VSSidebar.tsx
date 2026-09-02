@@ -7,7 +7,8 @@ import {
   IconPlus,
   IconFolder,
   IconDownload,
-  IconSearch
+  IconSearch,
+  IconHistory
 } from '@tabler/icons';
 import { ipcRenderer } from 'utils/ipc';
 import { openCollection } from 'providers/ReduxStore/slices/collections/actions';
@@ -167,6 +168,10 @@ const VSSidebar = () => {
     ipcRenderer.send('sidebar:open-global-environments');
   };
 
+  const handleOpenGlobalHistory = () => {
+    ipcRenderer.send('sidebar:open-global-history');
+  };
+
   const handleCreateCollection = () => {
     ipcRenderer.send('sidebar:open-create-collection');
   };
@@ -219,6 +224,10 @@ const VSSidebar = () => {
           <span className="sidebar-title">Collections</span>
         </div>
         <div className="sidebar-header-right">
+          <ActionIcon onClick={handleOpenGlobalHistory} label="History">
+            <IconHistory size={14} stroke={1.5} aria-hidden="true" />
+          </ActionIcon>
+
           <ActionIcon onClick={handleOpenGlobalEnvironments} label="Global Environments">
             <IconWorld size={14} stroke={1.5} aria-hidden="true" />
           </ActionIcon>
