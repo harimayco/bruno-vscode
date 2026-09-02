@@ -187,6 +187,38 @@ const registerGlobalEnvironmentsIpc = (workspaceEnvironmentsManager?: WorkspaceE
     }
   });
 
+  registerHandler('renderer:delete-global-environments', async (args) => {
+    const [params] = args as [{ environmentUids: string[]; workspacePath?: string; workspaceUid?: string }];
+    const { environmentUids, workspacePath } = params;
+
+    try {
+      if (!environmentUids || !environmentUids.length) {
+        return { success: true };
+      }
+
+      if (workspacePath && workspaceEnvironmentsManager) {
+        for (const environmentUid of environmentUids) {
+          try {
+            await workspaceEnvironmentsManager.deleteGlobalEnvironmentByPath(workspacePath, {
+              environmentUid
+            });
+          } catch (e) {
+            console.error(`Error deleting workspace global env ${environmentUid}:`, e);
+          }
+        }
+        await broadcastGlobalEnvironments(workspacePath);
+        return { success: true };
+      }
+
+      globalEnvironmentsStore.deleteGlobalEnvironments({ environmentUids });
+      await broadcastGlobalEnvironments();
+      return { success: true };
+    } catch (error) {
+      console.error('Error in renderer:delete-global-environments:', error);
+      throw error;
+    }
+  });
+
   registerHandler('renderer:select-global-environment', async (args) => {
     const [params] = args as [SelectEnvironmentParams];
     const { environmentUid, workspacePath } = params;

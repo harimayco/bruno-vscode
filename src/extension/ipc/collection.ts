@@ -1230,13 +1230,21 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
 
     try {
       const collectionName = collection.name || 'Imported Collection';
-      const collectionFolderName = sanitizeName(collectionName);
-      const dirPath = path.join(collectionLocation, collectionFolderName);
+      let sanitizedCollectionName = sanitizeName(collectionName);
+      if (!sanitizedCollectionName) {
+        sanitizedCollectionName = `untitled-${Date.now()}`;
+      }
+
+      let dirPath = path.join(collectionLocation, sanitizedCollectionName);
 
       if (fs.existsSync(dirPath)) {
         const files = fs.readdirSync(dirPath);
         if (files.length > 0) {
-          throw new Error(`collection: ${dirPath} already exists and is not empty`);
+          let counter = 1;
+          while (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0) {
+            dirPath = path.join(collectionLocation, `${sanitizedCollectionName} (${counter})`);
+            counter++;
+          }
         }
       }
 
@@ -1244,22 +1252,27 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
         await createDirectory(dirPath);
       }
 
+      const finalCollectionName = path.basename(dirPath);
       const uid = generateUidBasedOnHash(dirPath);
 
       // Use existing brunoConfig from collection if available, otherwise create new
       let brunoConfig: BrunoConfig = collection.brunoConfig || (format === 'yml'
         ? {
           opencollection: '1.0.0',
-          name: collectionName,
+          name: finalCollectionName,
           type: 'collection',
           ignore: ['node_modules', '.git']
         }
         : {
           version: '1',
-          name: collectionName,
+          name: finalCollectionName,
           type: 'collection',
           ignore: ['node_modules', '.git']
         });
+
+      if (brunoConfig && brunoConfig.name !== finalCollectionName) {
+        brunoConfig.name = finalCollectionName;
+      }
 
       if (format === 'yml') {
         const content = await stringifyCollection(collection.root || { meta: { name: collectionName } }, brunoConfig, { format });
@@ -1347,7 +1360,7 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
       const workspacePath = defaultWorkspaceManager.getDefaultWorkspacePath();
       if (workspacePath) {
         try {
-          await addToWorkspaceYml(workspacePath, { name: collectionName, path: dirPath });
+          await addToWorkspaceYml(workspacePath, { name: finalCollectionName, path: dirPath });
           const workspaceConfig = readWorkspaceConfig(workspacePath);
           const wsUid = defaultWorkspaceManager.getDefaultWorkspaceUid();
           const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);

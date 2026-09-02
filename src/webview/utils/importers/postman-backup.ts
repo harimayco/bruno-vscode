@@ -421,7 +421,7 @@ const buildFolderTree = (
 
 export const convertPostmanDumpEnvironments = (environments: any[] = []): any[] => {
   if (!Array.isArray(environments)) return [];
-  return environments
+  const parsed = environments
     .filter((env) => env && (env.name || env.id))
     .map((env) => ({
       uid: uuid(),
@@ -437,6 +437,9 @@ export const convertPostmanDumpEnvironments = (environments: any[] = []): any[] 
           secret: v.type === 'secret'
         }))
     }));
+
+  parsed.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base', numeric: true }));
+  return parsed;
 };
 
 export const convertPostmanDumpGlobals = (globals: any[] = []): any | null => {

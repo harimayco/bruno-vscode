@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, forwardRef } from 'react';
+import React, { useRef, useState, useEffect, useMemo, forwardRef } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import toast from 'react-hot-toast';
@@ -33,16 +33,21 @@ import { useBootstrap, getDefaultLocation } from '../data-hooks';
 
 const StyledWrapper = styled.div`
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   background-color: var(--vscode-editor-background, ${(props: any) => props.theme?.bg || '#1e1e1e'});
   color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
   font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 13px;
-  padding: 24px 32px;
+  padding: 24px 32px 32px 32px;
 
   .import-collection-container {
     max-width: 520px;
     margin: 0 auto;
+    padding-bottom: 24px;
   }
 
   .import-collection-header {
@@ -246,9 +251,14 @@ const StyledWrapper = styled.div`
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-    margin-top: 8px;
+    margin-top: 12px;
     padding-top: 16px;
+    padding-bottom: 8px;
     border-top: 1px solid var(--vscode-widget-border, ${(props: any) => props.theme?.input?.border || '#454545'});
+    position: sticky;
+    bottom: 0;
+    background-color: var(--vscode-editor-background, ${(props: any) => props.theme?.bg || '#1e1e1e'});
+    z-index: 10;
   }
 
   .btn {
@@ -434,6 +444,20 @@ const ImportCollectionView: React.FC = () => {
 
   const collectionName = getCollectionName(detectedFormat, rawData);
 
+  const detectedCollections = useMemo(() => {
+    if (!Array.isArray(rawData?.collections)) return [];
+    return [...rawData.collections].sort((a: any, b: any) =>
+      (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [rawData]);
+
+  const detectedEnvironments = useMemo(() => {
+    if (!Array.isArray(rawData?.environments)) return [];
+    return [...rawData.environments].sort((a: any, b: any) =>
+      (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [rawData]);
+
   const formik = useFormik({
     enableReinitialize: true,
     initialValues: {
@@ -468,14 +492,26 @@ const ImportCollectionView: React.FC = () => {
           }
 
           // 2. Import collections
+          let importedCollections = 0;
+          const failedCollections: string[] = [];
           for (const col of collections) {
-            if (!importToCollectionEnv) {
-              col.environments = [];
+            try {
+              if (!importToCollectionEnv) {
+                col.environments = [];
+              }
+              await importCollection(col, values.collectionLocation, collectionFormat);
+              importedCollections++;
+            } catch (err: any) {
+              console.error(`Failed to import collection "${col.name}":`, err);
+              failedCollections.push(col.name || 'Untitled');
             }
-            await importCollection(col, values.collectionLocation, collectionFormat);
           }
 
-          toast.success(`Successfully imported ${collections.length} collection(s) and ${environments.length} environment(s)`);
+          if (failedCollections.length === 0) {
+            toast.success(`Successfully imported ${importedCollections} collection(s) and ${environments.length} environment(s)`);
+          } else {
+            toast.error(`Imported ${importedCollections} collection(s). Failed: ${failedCollections.join(', ')}`);
+          }
           ipcRenderer.send('import-collection:close');
           return;
         } else {
@@ -715,22 +751,38 @@ const ImportCollectionView: React.FC = () => {
               <label className="form-label">Contents Detected</label>
               <div style={{ padding: '10px 12px', background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.05))', borderRadius: 4, fontSize: 12 }}>
                 <div style={{ marginBottom: 6, fontWeight: 500 }}>
-                  Collections ({rawData.collections?.length || 0}):
+                  Collections ({detectedCollections.length}):
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (rawData.environments?.length ? 10 : 0) }}>
-                  {(rawData.collections || []).map((c: any, idx: number) => (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  maxHeight: 110,
+                  overflowY: 'auto',
+                  padding: '2px 0',
+                  marginBottom: (detectedEnvironments.length ? 10 : 0)
+                }}>
+                  {detectedCollections.map((c: any, idx: number) => (
                     <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
                       {c.name || 'Untitled'}
                     </span>
                   ))}
                 </div>
-                {Array.isArray(rawData.environments) && rawData.environments.length > 0 && (
+                {detectedEnvironments.length > 0 && (
                   <>
                     <div style={{ marginBottom: 6, fontWeight: 500 }}>
-                      Environments ({rawData.environments.length}):
+                      Environments ({detectedEnvironments.length}):
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                      {rawData.environments.map((e: any, idx: number) => (
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 6,
+                      maxHeight: 110,
+                      overflowY: 'auto',
+                      padding: '2px 0',
+                      marginBottom: 10
+                    }}>
+                      {detectedEnvironments.map((e: any, idx: number) => (
                         <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
                           {e.name || 'Untitled'}
                         </span>

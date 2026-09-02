@@ -110,11 +110,12 @@ describe('Postman Backup Importer', () => {
     expect(col2.items[0].request.body.mode).toBe('json');
     expect(col2.items[0].request.body.json).toBe('{"device_id":"nf-ultra-0ccd08b2"}');
 
-    // Check environments
+    // Check environments (sorted ascending A-Z)
     expect(result.environments.length).toBe(2);
-    expect(result.environments[0].name).toBe('mslead prod');
-    expect(result.environments[0].variables.length).toBe(2);
-    expect(result.environments[0].variables[0]).toMatchObject({
+    expect(result.environments[0].name).toBe('mslead dev');
+    expect(result.environments[1].name).toBe('mslead prod');
+    expect(result.environments[1].variables.length).toBe(2);
+    expect(result.environments[1].variables[0]).toMatchObject({
       name: 'mslead_base_url',
       value: 'https://www.mslead.prod',
       enabled: true

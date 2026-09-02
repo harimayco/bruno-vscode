@@ -260,6 +260,21 @@ export const deleteGlobalEnvironment = ({
   });
 };
 
+export const deleteGlobalEnvironments = ({
+  environmentUids
+}: { environmentUids: string[] }): AppThunk => (dispatch, getState) => {
+  return new Promise((resolve, reject) => {
+    const { ipcRenderer } = window;
+    const state = getState();
+    const { workspaceUid, workspacePath } = getWorkspaceContext(state);
+
+    ipcRenderer
+      .invoke('renderer:delete-global-environments', { environmentUids, workspaceUid, workspacePath })
+      .then(resolve)
+      .catch(reject);
+  });
+};
+
 export const globalEnvironmentsUpdateEvent = ({
   globalEnvironmentVariables
 }: any): AppThunk => (dispatch, getState) => {
