@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { IconCopy, IconCheck } from '@tabler/icons';
 import { buildHarRequest } from 'utils/codegenerator/har';
 import { HTTPSnippet } from 'httpsnippet';
+import { decodeVariableBraces } from 'utils/common';
 
 const StyledModalContent = styled.div`
   display: flex;
@@ -159,7 +160,7 @@ const HistoryDetailsModal: React.FC<HistoryDetailsModalProps> = ({ entry, onClos
   return (
     <Modal
       size="lg"
-      title={`Request Details: ${entry.request.method} ${entry.request.url}`}
+      title={`Request Details: ${entry.request.method} ${decodeVariableBraces(entry.request.url)}`}
       handleCancel={onClose}
       hideFooter="true"
     >

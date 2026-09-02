@@ -202,6 +202,11 @@ export const generateUidBasedOnHash = (str: string): string => {
 
 export const stringifyIfNot = (v: unknown): string => typeof v === 'string' ? v : String(v);
 
+export const decodeVariableBraces = (str: string | null | undefined): string => {
+  if (!str || typeof str !== 'string') return str || '';
+  return str.replace(/%7B%7B/gi, '{{').replace(/%7D%7D/gi, '}}');
+};
+
 export const getEncoding = (headers: Record<string, string> | null | undefined): string | undefined => {
   // Parse the charset from content type: https://stackoverflow.com/a/33192813
   const charsetMatch = /charset=([^()<>@,;:"/[\]?.=\s]*)/i.exec(headers?.['content-type'] || '');

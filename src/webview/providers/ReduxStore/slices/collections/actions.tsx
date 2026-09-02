@@ -145,7 +145,7 @@ import {
   transformRequestToSaveToFilesystem,
   transformCollectionRootToSave
 } from 'utils/collections';
-import { uuid, waitForNextTick } from 'utils/common';
+import { uuid, waitForNextTick, decodeVariableBraces } from 'utils/common';
 import { cancelNetworkRequest, connectWS, sendGrpcRequest, sendNetworkRequest, sendWsRequest } from 'utils/network/index';
 import { callIpc } from 'utils/common/ipc';
 import brunoClipboard from 'utils/bruno-clipboard';
@@ -159,6 +159,7 @@ import {
   sortCollections as _sortCollections,
   updateCollectionMountStatus,
   moveCollection,
+  updateItemsSequences as _updateItemsSequences,
   requestCancelled,
   resetRunResults,
   responseReceived,
@@ -795,12 +796,13 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               itemCopy?.isTransient ||
               (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
             );
+            const historyUrl = decodeVariableBraces(itemCopy.request?.url || reqSent?.url || '');
             dispatch(
               recordHistoryEntry({
                 id: uuid(),
                 timestamp: Date.now(),
                 request: {
-                  url: reqSent?.url || itemCopy.request?.url || '',
+                  url: historyUrl,
                   method: String(reqSent?.method || itemCopy.request?.method || 'GET').toUpperCase(),
                   headers: (reqSent?.headers || itemCopy.request?.headers || []) as any,
                   params: (reqSent?.params || itemCopy.request?.params || []) as any,
@@ -870,7 +872,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
                 id: uuid(),
                 timestamp: Date.now(),
                 request: {
-                  url: itemCopy.request?.url || '',
+                  url: decodeVariableBraces(itemCopy.request?.url || ''),
                   method: String(itemCopy.request?.method || 'GET').toUpperCase(),
                   headers: itemCopy.request?.headers || [],
                   params: itemCopy.request?.params || [],
@@ -1516,9 +1518,14 @@ export const updateItemsSequences
           return reject(new Error('Collection not found'));
         }
 
-        const { ipcRenderer } = window;
+        dispatch(_updateItemsSequences({ collectionUid, itemsToResequence }));
 
-        ipcRenderer.invoke('renderer:resequence-items', itemsToResequence, collection.pathname).then(resolve).catch(reject);
+        const { ipcRenderer } = window;
+        if (ipcRenderer && ipcRenderer.invoke) {
+          ipcRenderer.invoke('renderer:resequence-items', itemsToResequence, collection.pathname).then(resolve).catch(reject);
+        } else {
+          resolve(true);
+        }
       });
     };
 
@@ -2889,6 +2896,28 @@ export const moveCollectionAndPersist
 }: any) =>
     (dispatch: any, getState: any) => {
       dispatch(moveCollection({ draggedItem, targetItem }));
+      try {
+        const state = getState();
+        const activeWorkspaceUid = state.workspaces?.activeWorkspaceUid;
+        const workspace = state.workspaces?.workspaces?.find((w: any) => w.uid === activeWorkspaceUid)
+          || state.workspaces?.workspaces?.find((w: any) => w.type === 'default');
+
+        if (workspace && state.collections?.collections) {
+          const workspaceCollections = state.collections.collections.filter((c: any) =>
+            workspace.collections?.some((wc: any) => normalizePath(wc.path) === normalizePath(c.pathname))
+          );
+          const collectionPaths = workspaceCollections.map((c: any) => c.pathname);
+          const { ipcRenderer } = window;
+          if (ipcRenderer && ipcRenderer.invoke) {
+            ipcRenderer.invoke('renderer:reorder-workspace-collections', {
+              workspacePath: workspace.pathname,
+              collectionPaths
+            }).catch((err: any) => console.error('Failed to persist collection order:', err));
+          }
+        }
+      } catch (err) {
+        console.error('Error in moveCollectionAndPersist:', err);
+      }
       return Promise.resolve();
     };
 

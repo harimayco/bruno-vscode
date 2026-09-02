@@ -411,6 +411,35 @@ const getWorkspaceCollections = (workspacePath: string): CollectionEntry[] => {
     });
 };
 
+const reorderCollectionsInWorkspace = async (
+  workspacePath: string,
+  collectionPaths: string[]
+): Promise<CollectionEntry[]> => {
+  return withLock(getWorkspaceLockKey(workspacePath), async () => {
+    const config = readWorkspaceConfig(workspacePath);
+    if (!config.collections || !config.collections.length) return [];
+
+    const normalizedNewPaths = collectionPaths.map((p) =>
+      path.normalize(path.isAbsolute(p) ? p : path.resolve(workspacePath, p))
+    );
+
+    config.collections.sort((a, b) => {
+      const absA = path.normalize(path.isAbsolute(a.path) ? a.path : path.resolve(workspacePath, a.path));
+      const absB = path.normalize(path.isAbsolute(b.path) ? b.path : path.resolve(workspacePath, b.path));
+      const idxA = normalizedNewPaths.indexOf(absA);
+      const idxB = normalizedNewPaths.indexOf(absB);
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+
+    const yamlContent = generateYamlContent(config);
+    await writeWorkspaceFileAtomic(workspacePath, yamlContent);
+    return config.collections;
+  });
+};
+
 const getWorkspaceUid = (workspacePath: string): string => {
   // TODO: Integrate with default workspace manager when available
   return generateUidBasedOnHash(workspacePath);
@@ -429,6 +458,7 @@ export {
   updateWorkspaceDocs,
   addCollectionToWorkspace,
   removeCollectionFromWorkspace,
+  reorderCollectionsInWorkspace,
   getWorkspaceCollections,
   generateYamlContent,
   getWorkspaceUid,

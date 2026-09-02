@@ -18,6 +18,7 @@ import { buildHarRequest } from 'utils/codegenerator/har';
 import { HTTPSnippet } from 'httpsnippet';
 import toast from 'react-hot-toast';
 import { sendNetworkRequest } from 'utils/network';
+import { decodeVariableBraces } from 'utils/common';
 import MenuDropdown from 'ui/MenuDropdown';
 import HistoryDetailsModal from './HistoryDetailsModal';
 import SaveToCollectionModal from './SaveToCollectionModal';
@@ -55,6 +56,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
 
   const menuDropdownRef = useRef<any>(null);
 
+  const decodedUrl = decodeVariableBraces(entry.request?.url || '');
   const method = (entry.request.method || 'GET').toLowerCase();
   const methodText = getMethodText(entry.request.method || 'GET');
   const status = entry.response?.status;
@@ -76,7 +78,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
       name: entry.source?.itemName || 'History Request',
       type: 'http-request',
       request: {
-        url: entry.request.url,
+        url: decodedUrl,
         method: entry.request.method,
         headers: Array.isArray(entry.request.headers) ? entry.request.headers : [],
         params: entry.request.params || [],
@@ -98,6 +100,10 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
           ...entry,
           id: entry.id,
           timestamp: Date.now(),
+          request: {
+            ...entry.request,
+            url: decodedUrl
+          },
           response: {
             status: typeof response.status === 'number' ? response.status : undefined,
             statusText: String(response.statusText || response.status || ''),
@@ -132,14 +138,10 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
     const itemUid = `history-${entry.id}`;
     transientItem.uid = itemUid;
 
-    // Set tab name from URL (or fallback)
-    const urlName = entry.request?.url?.trim() || 'Untitled Request';
-    transientItem.name = urlName;
-
     // Load exact snapshot data from history
     transientItem.request = {
       ...transientItem.request,
-      url: entry.request?.url || '',
+      url: decodedUrl,
       method: entry.request?.method || 'GET',
       headers: Array.isArray(entry.request?.headers) ? entry.request.headers : [],
       params: entry.request?.params || [],
@@ -188,7 +190,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
     try {
       const { har, unhash } = buildHarRequest({
         request: {
-          url: entry.request.url,
+          url: decodedUrl,
           method: entry.request.method,
           body: entry.request.body,
           params: entry.request.params as any,
@@ -255,8 +257,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
         <div className="item-main">
           <span className={`method-badge method-${method}`}>{methodText}</span>
 
-          <span className="url-text" title={entry.request.url}>
-            {entry.request.url || '/'}
+          <span className="url-text" title={decodedUrl}>
+            {decodedUrl || '/'}
             {entry.source?.collectionName && (
               <span className="origin-hint">
                 ({entry.source.collectionName}{entry.source.itemName ? ` / ${entry.source.itemName}` : ''})

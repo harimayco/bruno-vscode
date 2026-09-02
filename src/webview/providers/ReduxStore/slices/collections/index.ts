@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { find, filter, each, cloneDeep, get, set, map, concat } from 'lodash';
 import mime from 'mime-types';
 import path from 'path';
+import { normalizePath } from 'utils/common/path';
 import {
   addDepth,
   collapseAllItemsInCollection,
@@ -2697,6 +2698,27 @@ export const collectionsSlice = createSlice({
       }
     },
 
+    updateItemsSequences: (state, action: PayloadAction<{ collectionUid: string; itemsToResequence: Array<{ pathname: string; seq: number }> }>) => {
+      const { collectionUid, itemsToResequence } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (!collection || !Array.isArray(itemsToResequence)) return;
+
+      const updateSeqRecursive = (items?: AppItem[]) => {
+        if (!items || !items.length) return;
+        for (const item of items) {
+          const match = itemsToResequence.find(i => normalizePath(i.pathname) === normalizePath(item.pathname));
+          if (match) {
+            item.seq = match.seq;
+          }
+          if (item.items && item.items.length) {
+            updateSeqRecursive(item.items);
+          }
+        }
+      };
+
+      updateSeqRecursive(collection.items);
+    },
+
     resetRunResults: (state, action: PayloadAction<ResetRunResultsPayload>) => {
       const { collectionUid } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
@@ -3304,6 +3326,7 @@ export const {
   collectionClearOauth2CredentialsByUrl,
   collectionAddEnvFileEvent,
   moveCollection,
+  updateItemsSequences,
   resetRunResults,
   initRunRequestEvent,
   updateRunnerConfiguration,

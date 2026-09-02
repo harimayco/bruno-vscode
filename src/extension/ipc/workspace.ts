@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import * as vscode from 'vscode';
 import yaml from 'js-yaml';
-import { registerHandler, registerEventListener, sendToWebview } from './handlers';
+import { registerHandler, registerEventListener, sendToWebview, broadcastToAllWebviews } from './handlers';
 import { createDirectory, sanitizeName, isValidCollectionDirectory, posixifyPath } from '../utils/filesystem';
 import LastOpenedWorkspaces from '../store/last-opened-workspaces';
 import { defaultWorkspaceManager } from '../store/default-workspace';
@@ -17,6 +17,7 @@ import {
   updateWorkspaceDocs,
   addCollectionToWorkspace,
   removeCollectionFromWorkspace,
+  reorderCollectionsInWorkspace,
   getWorkspaceCollections,
   normalizeCollectionEntry,
   validateWorkspacePath,
@@ -312,6 +313,22 @@ const registerWorkspaceIpc = (workspaceWatcher?: WorkspaceWatcherInterface): voi
 
     try {
       await updateWorkspaceName(workspacePath, newName);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  registerHandler('renderer:reorder-workspace-collections', async (args) => {
+    const [{ workspacePath, collectionPaths }] = args as [{ workspacePath: string; collectionPaths: string[] }];
+    try {
+      if (!workspacePath || !Array.isArray(collectionPaths)) {
+        return { success: true };
+      }
+      await reorderCollectionsInWorkspace(workspacePath, collectionPaths);
+      const workspaceConfig = readWorkspaceConfig(workspacePath);
+      const configForClient = prepareWorkspaceConfigForClient(workspaceConfig, workspacePath, true);
+      broadcastToAllWebviews('main:workspace-config-updated', posixifyPath(workspacePath), getWorkspaceUid(workspacePath), configForClient);
       return { success: true };
     } catch (error) {
       throw error;

@@ -8,7 +8,9 @@ import get from 'lodash/get';
 import { IconFileImport, IconFolder, IconCaretDown, IconLoader2 } from '@tabler/icons';
 import jsyaml from 'js-yaml';
 import { browseDirectory, importCollection, importCollectionFromZip } from 'providers/ReduxStore/slices/collections/actions';
+import { addGlobalEnvironment } from 'providers/ReduxStore/slices/global-environments';
 import { isPostmanCollection } from 'utils/importers/postman-collection';
+import { isPostmanBackup, convertPostmanDumpToBruno } from 'utils/importers/postman-backup';
 import { isInsomniaCollection } from 'utils/importers/insomnia-collection';
 import { isOpenApiSpec } from 'utils/importers/openapi-collection';
 import { isWSDLCollection } from 'utils/importers/wsdl-collection';
@@ -320,6 +322,7 @@ const LOADING_MESSAGES = [
 ];
 
 const FORMAT_LABELS: Record<string, string> = {
+  'postman-backup': 'Postman Backup (Multi-collection & Environments)',
   openapi: 'OpenAPI / Swagger',
   postman: 'Postman',
   insomnia: 'Insomnia',
@@ -351,13 +354,18 @@ const convertFileToObject = async (file: File) => {
     }
     return parsed;
   } catch {
-    throw new Error('Failed to parse the file \u2013 ensure it is valid JSON or YAML');
+    throw new Error('Failed to parse the file – ensure it is valid JSON or YAML');
   }
 };
 
 const getCollectionName = (format: string, rawData: any): string => {
   if (!rawData) return 'Collection';
   switch (format) {
+    case 'postman-backup': {
+      const colCount = Array.isArray(rawData?.collections) ? rawData.collections.length : 0;
+      const envCount = Array.isArray(rawData?.environments) ? rawData.environments.length : 0;
+      return `${colCount} Collections & ${envCount} Environments`;
+    }
     case 'openapi':
       return rawData.info?.title || 'OpenAPI Collection';
     case 'postman':
@@ -417,6 +425,8 @@ const ImportCollectionView: React.FC = () => {
   const [detectedFormat, setDetectedFormat] = useState<string>('');
   const [groupingType, setGroupingType] = useState('tags');
   const [collectionFormat, setCollectionFormat] = useState('yml');
+  const [importToGlobalEnv, setImportToGlobalEnv] = useState(true);
+  const [importToCollectionEnv, setImportToCollectionEnv] = useState(false);
 
   // Workspace/preferences for default location
   const workspaces = useSelector((state: any) => state.workspaces?.workspaces || []);
@@ -447,6 +457,31 @@ const ImportCollectionView: React.FC = () => {
         if (detectedFormat === 'bruno-zip') {
           // ZIP imports are handled directly by the extension backend
           await (dispatch(importCollectionFromZip(rawData.zipFilePath, values.collectionLocation) as any));
+        } else if (detectedFormat === 'postman-backup') {
+          const { collections, environments } = convertPostmanDumpToBruno(rawData);
+
+          // 1. Import environments to Global Environments if enabled
+          if (importToGlobalEnv && environments.length > 0) {
+            for (const env of environments) {
+              try {
+                await (dispatch(addGlobalEnvironment({ name: env.name, variables: env.variables }) as any));
+              } catch (err) {
+                console.error(`Failed to create global environment ${env.name}:`, err);
+              }
+            }
+          }
+
+          // 2. Import collections
+          for (const col of collections) {
+            if (!importToCollectionEnv) {
+              col.environments = [];
+            }
+            await (dispatch(importCollection(col, values.collectionLocation, { format: collectionFormat }) as any));
+          }
+
+          toast.success(`Successfully imported ${collections.length} collection(s) and ${environments.length} environment(s)`);
+          ipcRenderer.send('import-collection:close');
+          return;
         } else {
           const convertedCollection = await convertCollection(detectedFormat, rawData, groupingType);
           await (dispatch(importCollection(convertedCollection, values.collectionLocation, { format: collectionFormat }) as any));
@@ -516,7 +551,8 @@ const ImportCollectionView: React.FC = () => {
       if (!data) throw new Error('Failed to parse file content');
 
       let type: string | null = null;
-      if (isOpenApiSpec(data)) type = 'openapi';
+      if (isPostmanBackup(data)) type = 'postman-backup';
+      else if (isOpenApiSpec(data)) type = 'openapi';
       else if (isWSDLCollection(data)) type = 'wsdl';
       else if (isPostmanCollection(data)) type = 'postman';
       else if (isInsomniaCollection(data)) type = 'insomnia';
@@ -682,6 +718,59 @@ const ImportCollectionView: React.FC = () => {
               {FORMAT_LABELS[detectedFormat] || detectedFormat}
             </span>
           </div>
+
+          {detectedFormat === 'postman-backup' && rawData && (
+            <div className="form-group">
+              <label className="form-label">Contents Detected</label>
+              <div style={{ padding: '10px 12px', background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.05))', borderRadius: 4, fontSize: 12 }}>
+                <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                  Collections ({rawData.collections?.length || 0}):
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (rawData.environments?.length ? 10 : 0) }}>
+                  {(rawData.collections || []).map((c: any, idx: number) => (
+                    <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
+                      {c.name || 'Untitled'}
+                    </span>
+                  ))}
+                </div>
+                {Array.isArray(rawData.environments) && rawData.environments.length > 0 && (
+                  <>
+                    <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                      Environments ({rawData.environments.length}):
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                      {rawData.environments.map((e: any, idx: number) => (
+                        <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
+                          {e.name || 'Untitled'}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.1))', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={importToGlobalEnv}
+                          onChange={(e) => setImportToGlobalEnv(e.target.checked)}
+                          disabled={isImporting}
+                        />
+                        <span>Import environments to <strong>Global Environments</strong> (shared across workspace)</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={importToCollectionEnv}
+                          onChange={(e) => setImportToCollectionEnv(e.target.checked)}
+                          disabled={isImporting}
+                        />
+                        <span>Also create environment files inside each collection folder</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="collectionLocation" className="form-label">

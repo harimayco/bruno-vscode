@@ -171,7 +171,15 @@ export async function openTransientRequestPanel(
     setCollectionsMessageSender(webviewSender);
     setWatcherMessageSender(webviewSender);
     try {
+      const watcherExists = collectionWatcher.hasWatcher(collectionPath);
       await openCollection(collectionWatcher, collectionPath);
+      await collectionWatcher.loadEnvironments(collectionPath, collectionUid, webviewSender);
+
+      // If a watcher already existed, openCollection won't trigger a scan so
+      // this panel's webview needs the full item list loaded explicitly.
+      if (watcherExists) {
+        await collectionWatcher.loadFullCollection(collectionPath, collectionUid, webviewSender);
+      }
     } catch (error) {
       console.error('TransientRequestPanel: Error opening collection:', error);
     } finally {

@@ -4,6 +4,7 @@ import Modal from 'components/Modal';
 import { HistoryEntry } from '@bruno-types';
 import { useDispatch, useSelector } from 'react-redux';
 import { newHttpRequest } from 'providers/ReduxStore/slices/collections/actions';
+import { decodeVariableBraces } from 'utils/common';
 import toast from 'react-hot-toast';
 
 const StyledModalContent = styled.div`
@@ -51,8 +52,9 @@ const SaveToCollectionModal: React.FC<SaveToCollectionModalProps> = ({ entry, on
   const defaultCollectionUid = entry.source?.collectionUid || collections[0]?.uid || '';
   const [selectedCollectionUid, setSelectedCollectionUid] = useState<string>(defaultCollectionUid);
 
+  const decodedUrl = decodeVariableBraces(entry.request.url || '');
   const defaultName = entry.source?.itemName
-    || (entry.request.url ? entry.request.url.split('?')[0].split('/').filter(Boolean).pop() || 'Request' : 'Request');
+    || (decodedUrl ? decodedUrl.split('?')[0].split('/').filter(Boolean).pop() || 'Request' : 'Request');
   const [requestName, setRequestName] = useState<string>(defaultName);
 
   const handleSave = async () => {
@@ -76,7 +78,7 @@ const SaveToCollectionModal: React.FC<SaveToCollectionModalProps> = ({ entry, on
           requestName: trimmedName,
           filename,
           requestType: 'http-request',
-          requestUrl: entry.request.url,
+          requestUrl: decodedUrl,
           requestMethod: entry.request.method,
           collectionUid: selectedCollectionUid,
           itemUid: null,

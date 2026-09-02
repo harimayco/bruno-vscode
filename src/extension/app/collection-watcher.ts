@@ -1469,6 +1469,18 @@ class CollectionWatcher {
       const filePath = path.join(envDirPath, file);
       await this.addEnvironmentFileWithSender(filePath, collectionUid, collectionPath, targetSender);
     }
+
+    // Hydrate UI state snapshot (selected environment)
+    const uiStateSnapshotStore = new UiStateSnapshot();
+    const collectionsSnapshotState = uiStateSnapshotStore.getCollections();
+    const posixPath = posixifyPath(collectionPath);
+    const collectionSnapshotState = collectionsSnapshotState?.find(
+      (c: { pathname?: string }) => c?.pathname === collectionPath || c?.pathname === posixPath
+    );
+
+    if (targetSender && collectionSnapshotState) {
+      targetSender('main:hydrate-app-with-ui-state-snapshot', collectionSnapshotState);
+    }
   }
 
   /**

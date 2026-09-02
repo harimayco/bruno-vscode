@@ -994,6 +994,81 @@ const registerCollectionIpc = (watcher: CollectionWatcherInterface): void => {
     }
   });
 
+  registerHandler('renderer:resequence-items', async (args) => {
+    const [itemsToResequence, collectionPath] = args as [Array<{ pathname: string; seq: number }>, string];
+
+    try {
+      if (!Array.isArray(itemsToResequence) || !itemsToResequence.length) {
+        return { success: true };
+      }
+
+      const collectionFormat = collectionPath ? getCollectionFormat(collectionPath) : 'bru';
+
+      for (const item of itemsToResequence) {
+        const { pathname: itemPathname, seq } = item;
+        if (!itemPathname || typeof seq !== 'number') continue;
+
+        try {
+          if (!fs.existsSync(itemPathname)) continue;
+
+          const stat = fs.statSync(itemPathname);
+          if (stat.isDirectory()) {
+            const folderBruPath = path.join(itemPathname, 'folder.bru');
+            const folderYmlPath = path.join(itemPathname, 'folder.yml');
+
+            if (fs.existsSync(folderBruPath)) {
+              const content = fs.readFileSync(folderBruPath, 'utf8');
+              const folderJson = await parseFolder(content, { format: 'bru' });
+              if (folderJson) {
+                folderJson.meta = folderJson.meta || {};
+                folderJson.meta.seq = seq;
+                folderJson.seq = seq;
+                const newContent = await stringifyFolder(folderJson, { format: 'bru' });
+                await writeFile(folderBruPath, newContent);
+              }
+            } else if (fs.existsSync(folderYmlPath)) {
+              const content = fs.readFileSync(folderYmlPath, 'utf8');
+              const folderJson = await parseFolder(content, { format: 'yml' });
+              if (folderJson) {
+                folderJson.meta = folderJson.meta || {};
+                folderJson.meta.seq = seq;
+                folderJson.seq = seq;
+                const newContent = await stringifyFolder(folderJson, { format: 'yml' });
+                await writeFile(folderYmlPath, newContent);
+              }
+            } else {
+              const folderFileName = collectionFormat === 'yml' ? 'folder.yml' : 'folder.bru';
+              const folderFilePath = path.join(itemPathname, folderFileName);
+              const folderData = {
+                name: path.basename(itemPathname),
+                seq
+              };
+              const newContent = await stringifyFolder(folderData, { format: collectionFormat });
+              await writeFile(folderFilePath, newContent);
+            }
+          } else {
+            const itemFormat = itemPathname.endsWith('.yml')
+              ? 'yml'
+              : (itemPathname.endsWith('.bru') ? 'bru' : collectionFormat);
+            const content = fs.readFileSync(itemPathname, 'utf8');
+            const parsed = await parseRequest(content, { format: itemFormat });
+            if (parsed) {
+              parsed.seq = seq;
+              const newContent = await stringifyRequest(parsed, { format: itemFormat });
+              await writeFile(itemPathname, newContent);
+            }
+          }
+        } catch (itemErr) {
+          console.error(`[resequence-items] Failed to resequence item ${itemPathname}:`, itemErr);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   registerHandler('renderer:save-bruno-config', async (args) => {
     const [collectionPath, brunoConfig] = args as [string, BrunoConfig];
 
