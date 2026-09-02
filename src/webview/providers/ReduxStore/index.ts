@@ -8,6 +8,7 @@ import notificationsReducer from './slices/notifications';
 import globalEnvironmentsReducer from './slices/global-environments';
 import logsReducer from './slices/logs';
 import workspacesReducer from './slices/workspaces';
+import historyReducer from './slices/history';
 import { draftDetectMiddleware } from './middlewares/draft/middleware';
 import { autosaveMiddleware } from './middlewares/autosave/middleware';
 import { vscodeDirtyStateMiddleware } from './middlewares/vscode-dirty-state/middleware';
@@ -20,6 +21,7 @@ export interface RootState {
   globalEnvironments: ReturnType<typeof globalEnvironmentsReducer>;
   logs: ReturnType<typeof logsReducer>;
   workspaces: ReturnType<typeof workspacesReducer>;
+  history: ReturnType<typeof historyReducer>;
 }
 
 const isDevEnv = (): boolean => {
@@ -40,7 +42,8 @@ export const store = configureStore({
     notifications: notificationsReducer,
     globalEnvironments: globalEnvironmentsReducer,
     logs: logsReducer,
-    workspaces: workspacesReducer
+    workspaces: workspacesReducer,
+    history: historyReducer
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware({
     // on large/complex state objects (responses, etc.)

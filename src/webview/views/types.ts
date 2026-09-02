@@ -24,6 +24,7 @@ export type ViewType =
   | 'folder-settings'      // Folder configuration
   | 'collection-runner'    // Runner results view
   | 'global-environments'  // Global environment variables
+  | 'global-history'       // Global request history
   | 'environment-settings' // Collection environment settings
   | 'variables'            // Collection variables editor
   | 'collection-overview'  // Collection overview
@@ -93,6 +94,10 @@ export const VIEW_CONFIGS: Record<ViewType, ViewConfig> = {
   },
   'global-environments': {
     viewType: 'global-environments',
+    requiresCollection: false,
+  },
+  'global-history': {
+    viewType: 'global-history',
     requiresCollection: false,
   },
   'environment-settings': {

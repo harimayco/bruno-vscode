@@ -149,6 +149,7 @@ import { uuid, waitForNextTick } from 'utils/common';
 import { cancelNetworkRequest, connectWS, sendGrpcRequest, sendNetworkRequest, sendWsRequest } from 'utils/network/index';
 import { callIpc } from 'utils/common/ipc';
 import brunoClipboard from 'utils/bruno-clipboard';
+import { recordHistoryEntry } from 'providers/ReduxStore/slices/history';
 
 import {
   collectionAddEnvFileEvent as _collectionAddEnvFileEvent,
@@ -781,6 +782,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
     } else {
       sendNetworkRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
         .then((response: Record<string, unknown>) => {
+          const reqSent = (response.requestSent as RequestSent | undefined) || itemCopy.request;
           dispatch(
             responseReceived({
               itemUid,
@@ -789,6 +791,45 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               requestSent: response.requestSent as RequestSent | undefined
             })
           );
+          try {
+            const isTransient = Boolean(
+              itemCopy?.isTransient ||
+              (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
+            );
+            dispatch(
+              recordHistoryEntry({
+                id: uuid(),
+                timestamp: Date.now(),
+                request: {
+                  url: reqSent?.url || itemCopy.request?.url || '',
+                  method: String(reqSent?.method || itemCopy.request?.method || 'GET').toUpperCase(),
+                  headers: (reqSent?.headers || itemCopy.request?.headers || []) as any,
+                  params: (reqSent?.params || itemCopy.request?.params || []) as any,
+                  body: reqSent?.body || itemCopy.request?.body || { mode: 'none' },
+                  auth: reqSent?.auth || itemCopy.request?.auth || {}
+                },
+                response: {
+                  status: typeof response.status === 'number' ? response.status : undefined,
+                  statusText: String(response.statusText || response.status || ''),
+                  duration: typeof response.duration === 'number' ? response.duration : 0,
+                  size: typeof response.size === 'number' ? response.size : 0,
+                  headers: response.headers as Record<string, unknown> | undefined,
+                  data: response.data,
+                  error: null
+                },
+                source: {
+                  collectionUid: collectionCopy?.uid,
+                  collectionName: collectionCopy?.name,
+                  collectionPath: collectionCopy?.pathname,
+                  itemUid: itemCopy?.uid,
+                  itemName: itemCopy?.name,
+                  itemPath: isTransient ? undefined : itemCopy?.pathname
+                }
+              })
+            );
+          } catch {
+            // Ignore history recording failures
+          }
         })
         .then(() => resolve())
         .catch((err: Error) => {
@@ -818,6 +859,44 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               response: errorResponse
             })
           );
+
+          try {
+            const isTransient = Boolean(
+              itemCopy?.isTransient ||
+              (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
+            );
+            dispatch(
+              recordHistoryEntry({
+                id: uuid(),
+                timestamp: Date.now(),
+                request: {
+                  url: itemCopy.request?.url || '',
+                  method: String(itemCopy.request?.method || 'GET').toUpperCase(),
+                  headers: itemCopy.request?.headers || [],
+                  params: itemCopy.request?.params || [],
+                  body: itemCopy.request?.body || { mode: 'none' },
+                  auth: itemCopy.request?.auth || {}
+                },
+                response: {
+                  status: 0,
+                  statusText: 'Error',
+                  duration: 0,
+                  size: 0,
+                  error: err.message ?? 'Something went wrong'
+                },
+                source: {
+                  collectionUid: collectionCopy?.uid,
+                  collectionName: collectionCopy?.name,
+                  collectionPath: collectionCopy?.pathname,
+                  itemUid: itemCopy?.uid,
+                  itemName: itemCopy?.name,
+                  itemPath: isTransient ? undefined : itemCopy?.pathname
+                }
+              })
+            );
+          } catch {
+            // Ignore history recording failures
+          }
         });
     }
   });

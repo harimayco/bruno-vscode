@@ -229,6 +229,11 @@
         "category": "Bruno"
       },
       {
+        "command": "bruno.openGlobalHistory",
+        "title": "Open Global History",
+        "category": "Bruno"
+      },
+      {
         "command": "bruno.openEnvironmentSettings",
         "title": "Open Environment Settings",
         "category": "Bruno"
