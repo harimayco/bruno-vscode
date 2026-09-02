@@ -6,6 +6,7 @@ import { SidebarViewProvider } from '../views/SidebarViewProvider';
 import { resolveCollectionRoot } from '../utils/path';
 import { openRunnerPanel } from '../panels/runner-panel';
 import { openGlobalEnvironmentsPanel } from '../panels/global-environments-panel';
+import { openGlobalHistoryPanel } from '../panels/global-history-panel';
 import { openEnvironmentSettingsPanel } from '../panels/environment-settings-panel';
 import { openCreateCollectionPanel } from '../panels/create-collection-panel';
 import { openImportCollectionPanel } from '../panels/import-collection-panel';
@@ -209,6 +210,12 @@ export function registerMainCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('bruno.openGlobalEnvironments', async () => {
       await openGlobalEnvironmentsPanel(context);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('bruno.openGlobalHistory', async () => {
+      await openGlobalHistoryPanel(context);
     })
   );
 

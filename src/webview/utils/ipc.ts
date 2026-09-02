@@ -129,10 +129,12 @@ function initializeMessageHandler(): void {
   }
 }
 
-try {
-  initializeMessageHandler();
-} catch (err) {
-  console.error('[Bruno IPC] Failed to initialize message handler:', err);
+if (typeof window !== 'undefined') {
+  try {
+    initializeMessageHandler();
+  } catch (err) {
+    console.error('[Bruno IPC] Failed to initialize message handler:', err);
+  }
 }
 
 export const ipcRenderer = {
@@ -236,7 +238,9 @@ export const ipcRenderer = {
   }
 };
 
-(window as unknown as Window & { ipcRenderer?: typeof ipcRenderer }).ipcRenderer = ipcRenderer;
+if (typeof window !== 'undefined') {
+  (window as unknown as Window & { ipcRenderer?: typeof ipcRenderer }).ipcRenderer = ipcRenderer;
+}
 
 export const callIpc = <T = unknown>(channel: string, ...args: unknown[]): Promise<T> => {
   return ipcRenderer.invoke<T>(channel, ...args);

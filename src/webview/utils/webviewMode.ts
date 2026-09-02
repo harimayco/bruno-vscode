@@ -9,19 +9,19 @@ export const isSidebarMode = (): boolean => {
 };
 
 export const openRequestInVSCodeEditor = (requestPath: string): void => {
-  if (isSidebarMode() && window.ipcRenderer) {
+  if (window.ipcRenderer) {
     window.ipcRenderer.send('sidebar:open-request', requestPath);
   }
 };
 
 export const openAppInVSCodeEditor = (appPath: string): void => {
-  if (isSidebarMode() && window.ipcRenderer) {
+  if (window.ipcRenderer) {
     window.ipcRenderer.send('sidebar:open-app', appPath);
   }
 };
 
 export const openFolderInVSCodeRunner = (folderPath: string): void => {
-  if (isSidebarMode() && window.ipcRenderer) {
+  if (window.ipcRenderer) {
     window.ipcRenderer.send('sidebar:open-folder', folderPath);
   }
 };

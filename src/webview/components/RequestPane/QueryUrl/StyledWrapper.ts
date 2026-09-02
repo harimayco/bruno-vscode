@@ -4,6 +4,25 @@ const Wrapper = styled.div`
   height: 2.1rem;
   border: ${(props) => props.theme.requestTabPanel.url.border};
   border-radius: ${(props) => props.theme.border.radius.base};
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+
+  .input-container {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .editor-wrapper {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #send-request {
+    flex-shrink: 0;
+  }
 
 
   .infotip {
