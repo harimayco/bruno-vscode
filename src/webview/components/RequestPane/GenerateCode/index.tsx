@@ -16,6 +16,12 @@ import {
   mergeHeaders
 } from 'utils/collections';
 import { interpolateUrl, interpolateUrlPathParams } from 'utils/url';
+import {
+  interpolateHeaders,
+  interpolateParams,
+  interpolateAuth,
+  interpolateBody
+} from 'utils/codegenerator/interpolate';
 import StyledWrapper from './StyledWrapper';
 
 const TARGET_TO_CM_MODE: Record<string, string> = {
@@ -79,28 +85,40 @@ const GenerateCodeItem = ({ item, collection }: GenerateCodeItemProps) => {
     if (!open || !request?.url || !activeLanguage) return '';
 
     try {
-      
       const resolvedRequest = resolveInheritedAuth(item, collection);
       const requestTreePath = getTreePathFromCollectionToItem(collection, item);
       const mergedHeaders = mergeHeaders(collection, request, requestTreePath);
 
-      const authHeaders = getAuthHeaders(undefined, resolvedRequest?.auth);
-      const headers = [...mergedHeaders, ...authHeaders];
-
+      let resolvedAuth = resolvedRequest?.auth;
       let url = request.url || '';
+      let params = request.params || [];
+      let body = request.body;
+
       if (shouldInterpolate) {
         const variables = getAllVariables(collection, item);
         url = interpolateUrl({ url, variables }) ?? url;
+        resolvedAuth = interpolateAuth(resolvedAuth, variables);
+        params = interpolateParams(params, variables);
+        body = interpolateBody(body, variables);
       }
-      url = interpolateUrlPathParams(url, request.params || []);
+
+      const authHeaders = getAuthHeaders(undefined, resolvedAuth);
+      let headers = [...mergedHeaders, ...authHeaders];
+
+      if (shouldInterpolate) {
+        const variables = getAllVariables(collection, item);
+        headers = interpolateHeaders(headers, variables);
+      }
+
+      url = interpolateUrlPathParams(url, params);
 
       const { har, unhash } = buildHarRequest({
         request: {
           url,
           method: request.method,
-          body: request.body,
-          params: request.params,
-          auth: resolvedRequest?.auth
+          body,
+          params,
+          auth: resolvedAuth
         },
         headers
       });
