@@ -33,7 +33,7 @@ import collectionWatcher, { setMessageSender as setWatcherMessageSender } from '
 import { setMessageSender as setCollectionsMessageSender, setEventEmitter as setCollectionsEventEmitter } from './app/collections';
 
 import { stateManager } from './webview/state-manager';
-import { BrunoEditorProvider } from './editors/bruno-editor-provider';
+import { BrunoEditorProvider, registerScriptErrorSourceHandler } from './editors/bruno-editor-provider';
 import { SidebarViewProvider } from './views/SidebarViewProvider';
 import { WorkspaceCollectionsProvider } from './views/WorkspaceCollectionsProvider';
 import { LogsViewProvider } from './views/LogsViewProvider';
@@ -69,6 +69,7 @@ function registerIpcHandlers(): void {
   registerHistoryIpc();
   registerNetworkIpc();
   registerDirtyStateHandlers();
+  registerScriptErrorSourceHandler();
 
   registerWorkspaceIpc({
     addWatcher: (_workspacePath: string) => {},
