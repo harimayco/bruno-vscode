@@ -362,7 +362,7 @@ const QueryUrl = ({
       </div>
       <div
         id="request-url"
-        className="h-full w-full flex flex-row flex-1 min-w-0 items-center overflow-hidden input-container"
+        className="h-full w-full min-w-0 flex flex-row input-container"
       >
         <div className="flex-1 min-w-0 h-full overflow-hidden editor-wrapper">
           <SingleLineEditor

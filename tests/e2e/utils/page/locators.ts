@@ -19,7 +19,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     container: () => frame.getByTestId('collection-settings'),
     // Overview → Requests line, e.g. "2 requests in collection".
     requestsInfo: () => frame.getByTestId('collection-requests-count'),
-    requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded')
+    requestsNotLoaded: () => frame.getByTestId('collection-requests-not-loaded'),
+    saveButton: () => frame.getByTestId('collection-settings-save')
   },
   requestUrl: {
     editor: () => frame.locator('#request-url'),
@@ -62,7 +63,7 @@ export const buildCommonLocators = (frame: FrameLike) => ({
   workbench: {
     editorTab: (title: string) => frame.locator('.tabs-container .tab').filter({ hasText: title }),
     editorTabClose: (title: string) =>
-      frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.action-label.codicon-close')
+      frame.locator('.tabs-container .tab').filter({ hasText: title }).locator('.tab-actions .action-label')
   },
   // New Request panel form.
   newRequest: {
@@ -88,6 +89,10 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     columnNameInput: () => frame.getByTestId('column-name').locator('input'),
     columnValueEditor: () => frame.getByTestId('column-value').locator('.CodeMirror'),
     columnCheckbox: () => frame.getByTestId('column-checkbox')
+  },
+  varsTable: {
+    rows: (scope: 'request' | 'collection' | 'folder', kind: 'req' | 'res' = 'req') =>
+      frame.getByTestId(`${scope}-vars-${kind}`).locator('tbody tr')
   },
   auth: {
     modeSelector: () => frame.locator('.auth-mode-selector'),
@@ -126,6 +131,8 @@ export const buildCommonLocators = (frame: FrameLike) => ({
     methodItem: (text: string) => frame.getByTestId('grpc-method-item').filter({ hasText: text }),
     selectedMethodName: () => frame.getByTestId('selected-grpc-method-name'),
     messageEditor: () => frame.getByTestId('grpc-messages-container').locator('.CodeMirror-wrap').first(),
+    messages: () => frame.getByTestId('grpc-messages-container').locator('.message-container'),
+    addMessageButton: () => frame.getByTestId('grpc-add-message-button'),
     sendRequestButton: () => frame.getByTestId('grpc-send-request-button'),
     responseStatusCode: () => frame.getByTestId('grpc-response-status-code'),
     responseContent: () => frame.getByTestId('grpc-response-content')
