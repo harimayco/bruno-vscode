@@ -322,6 +322,10 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('bruno.openGlobalEnvironments');
         break;
 
+      case 'sidebar:open-global-history':
+        await vscode.commands.executeCommand('bruno.openGlobalHistory');
+        break;
+
       case 'sidebar:open-environment-settings':
         if (args[0] && typeof args[0] === 'object') {
           const { collectionPath } = args[0] as { collectionPath?: string };

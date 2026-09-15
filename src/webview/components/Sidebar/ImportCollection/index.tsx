@@ -4,6 +4,7 @@ import { toastError } from 'utils/common/error';
 import Modal from 'components/Modal';
 import jsyaml from 'js-yaml';
 import { isPostmanCollection } from 'utils/importers/postman-collection';
+import { isPostmanBackup } from 'utils/importers/postman-backup';
 import { isInsomniaCollection } from 'utils/importers/insomnia-collection';
 import { isOpenApiSpec } from 'utils/importers/openapi-collection';
 import { isWSDLCollection } from 'utils/importers/wsdl-collection';
@@ -104,7 +105,9 @@ const ImportCollection = ({
 
       let type = null;
 
-      if (isOpenApiSpec(data)) {
+      if (isPostmanBackup(data)) {
+        type = 'postman-backup';
+      } else if (isOpenApiSpec(data)) {
         type = 'openapi';
       } else if (isWSDLCollection(data)) {
         type = 'wsdl';

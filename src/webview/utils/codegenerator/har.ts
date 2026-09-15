@@ -3,7 +3,7 @@ type BodyMode = 'json' | 'text' | 'xml' | 'sparql' | 'formUrlEncoded' | 'graphql
 interface Header {
   name: string;
   value: string;
-  enabled: boolean;
+  enabled?: boolean;
 }
 
 interface RequestBody {
@@ -11,11 +11,25 @@ interface RequestBody {
   [key: string]: unknown;
 }
 
+interface FormParam {
+  name: string;
+  value: string;
+  enabled?: boolean;
+  type?: string;
+}
+
+interface FileParam {
+  name?: string;
+  filePath?: string;
+  contentType?: string;
+  selected?: boolean;
+}
+
 interface HarRequest {
   url: string;
   method: string;
   body?: RequestBody;
-  params?: Array<{ name: string; value: string; enabled: boolean; type: string }>;
+  params?: Array<{ name: string; value: string; enabled?: boolean; type?: string }>;
   auth?: {
     mode?: string;
     apikey?: {
@@ -25,6 +39,41 @@ interface HarRequest {
     };
   };
 }
+
+const VARIABLE_REGEX = /\{\{([^}]+)\}\}/g;
+
+/**
+ * Replaces {{var}} expressions with temporary alphanumeric tokens so
+ * the URL passes URI format validation in HTTPSnippet and har-validator.
+ * Returns an unhash helper to restore the original {{var}} in the output snippet.
+ */
+export const patternHasher = (input: string) => {
+  const hashToOriginal: Record<string, string> = {};
+  let hashed = false;
+
+  const result = (input || '').replace(VARIABLE_REGEX, (matchedVar) => {
+    hashed = true;
+    let h = 5381;
+    for (let i = 0; i < matchedVar.length; i++) {
+      h = ((h << 5) + h + matchedVar.charCodeAt(i)) | 0;
+    }
+    const token = `bruno_var_hash_${Math.abs(h)}`;
+    hashToOriginal[token] = matchedVar;
+    return token;
+  });
+
+  return {
+    hashed: result,
+    restore(text: string) {
+      if (!hashed || !text) return text;
+      let out = text;
+      for (const [token, orig] of Object.entries(hashToOriginal)) {
+        out = out.replaceAll(token, orig);
+      }
+      return out;
+    }
+  };
+};
 
 const createContentType = (mode: BodyMode | undefined): string => {
   switch (mode) {
@@ -50,102 +99,89 @@ const createContentType = (mode: BodyMode | undefined): string => {
 };
 
 /**
- * Creates a list of enabled headers for the request, ensuring no duplicate content-type headers.
- *
- * @param request - The request object.
- * @param headers - The array of header objects, each containing name, value, and enabled properties.
- * @returns An array of enabled headers with normalized names and values.
+ * Creates a list of enabled headers for the request, ensuring valid string names & values,
+ * and no duplicate content-type headers.
  */
-const createHeaders = (request: HarRequest, headers: Header[]): Array<{ name: string; value: string }> => {
-  const enabledHeaders = headers
-    .filter((header) => header.enabled)
+const createHeaders = (request: HarRequest, headers: Header[] = []): Array<{ name: string; value: string }> => {
+  const enabledHeaders = (headers || [])
+    .filter((header) => header && header.enabled !== false && typeof header.name === 'string' && header.name.trim() !== '')
     .map((header) => ({
-      name: header.name.toLowerCase(),
-      value: header.value
+      name: String(header.name).trim(),
+      value: header.value == null ? '' : String(header.value)
     }));
 
   const contentType = createContentType(request.body?.mode);
-  if (contentType !== '' && !enabledHeaders.some((header) => header.name === 'content-type')) {
-    enabledHeaders.push({ name: 'content-type', value: contentType });
+  if (contentType !== '' && !enabledHeaders.some((header) => header.name.toLowerCase() === 'content-type')) {
+    enabledHeaders.push({ name: 'Content-Type', value: contentType });
   }
 
   return enabledHeaders;
 };
 
-interface FormParam {
-  name: string;
-  value: string;
-  enabled?: boolean;
-  type?: string;
-}
-
-interface FileParam {
-  name?: string;
-  filePath?: string;
-  contentType?: string;
-  selected?: boolean;
-}
-
+/**
+ * Creates query parameters ensuring valid strings for name & value to satisfy HAR schema.
+ */
 const createQuery = (
-  queryParams: Array<{ name: string; value: string; enabled: boolean; type: string }> = [],
+  queryParams: Array<{ name: string; value: string; enabled?: boolean; type?: string }> = [],
   request: HarRequest
 ): Array<{ name: string; value: string }> => {
-  const params = queryParams
-    .filter((param) => param.enabled && param.type === 'query')
+  const params = (queryParams || [])
+    .filter((param) => param && param.enabled !== false && (param.type === 'query' || param.type === undefined) && typeof param.name === 'string' && param.name.trim() !== '')
     .map((param) => ({
-      name: param.name,
-      value: param.value
+      name: String(param.name).trim(),
+      value: param.value == null ? '' : String(param.value)
     }));
 
   if (request?.auth?.mode === 'apikey'
     && request?.auth?.apikey?.placement === 'queryparams'
-    && request?.auth?.apikey?.key
-    && request?.auth?.apikey?.value) {
+    && request?.auth?.apikey?.key) {
     params.push({
-      name: request.auth.apikey.key,
-      value: request.auth.apikey.value
+      name: String(request.auth.apikey.key).trim(),
+      value: request.auth.apikey.value == null ? '' : String(request.auth.apikey.value)
     });
   }
 
   return params;
 };
 
-const createPostData = (body: RequestBody) => {
+/**
+ * Creates HAR postData ensuring all fields match the HAR JSON Schema (types must be string / array of objects).
+ */
+const createPostData = (body?: RequestBody) => {
+  if (!body || !body.mode || body.mode === 'none') {
+    return undefined;
+  }
+
   const contentType = createContentType(body.mode);
   const mode = body.mode as string;
 
   switch (body.mode) {
     case 'formUrlEncoded': {
       const formParams = (Array.isArray(body[mode]) ? body[mode] : []) as FormParam[];
+      const enabledParams = formParams.filter((param) => param && param.enabled !== false && typeof param.name === 'string' && param.name.trim() !== '');
+      const searchParams = new URLSearchParams();
+      enabledParams.forEach((param) => {
+        searchParams.append(String(param.name).trim(), param.value == null ? '' : String(param.value));
+      });
       return {
-        mimeType: contentType,
-        text: new URLSearchParams(
-          formParams
-            .filter((param) => param?.enabled)
-            .reduce<Record<string, string>>((acc, param) => {
-              acc[param.name] = param.value;
-              return acc;
-            }, {})
-        ).toString(),
-        params: formParams
-          .filter((param) => param?.enabled)
-          .map((param) => ({
-            name: param.name,
-            value: param.value
-          }))
+        mimeType: contentType || 'application/x-www-form-urlencoded',
+        text: searchParams.toString(),
+        params: enabledParams.map((param) => ({
+          name: String(param.name).trim(),
+          value: param.value == null ? '' : String(param.value)
+        }))
       };
     }
     case 'multipartForm': {
       const multipartParams = (Array.isArray(body[mode]) ? body[mode] : []) as FormParam[];
+      const enabledParams = multipartParams.filter((param) => param && param.enabled !== false && typeof param.name === 'string' && param.name.trim() !== '');
       return {
-        mimeType: contentType,
-        params: multipartParams
-          .filter((param) => param?.enabled)
-          .map((param) => ({
-            name: param.name,
-            value: param.value,
-            ...(param.type === 'file' && { fileName: param.value })
-          }))
+        mimeType: contentType || 'multipart/form-data',
+        params: enabledParams.map((param) => ({
+          name: String(param.name).trim(),
+          value: param.value == null ? '' : String(param.value),
+          ...(param.type === 'file' && { fileName: String(param.value || '') })
+        }))
       };
     }
     case 'file': {
@@ -154,29 +190,49 @@ const createPostData = (body: RequestBody) => {
       const filePath = selectedFile?.filePath || '';
       return {
         mimeType: selectedFile?.contentType || 'application/octet-stream',
-        text: filePath,
+        text: String(filePath),
         params: filePath
           ? [
               {
-                name: selectedFile?.name || 'file',
-                value: filePath,
-                fileName: filePath,
-                contentType: selectedFile?.contentType || 'application/octet-stream'
+                name: String(selectedFile?.name || 'file'),
+                value: String(filePath),
+                fileName: String(filePath),
+                contentType: String(selectedFile?.contentType || 'application/octet-stream')
               }
             ]
           : []
       };
     }
-    case 'graphql':
+    case 'graphql': {
+      const graphqlData = body[mode];
+      const text = typeof graphqlData === 'object' && graphqlData !== null
+        ? JSON.stringify(graphqlData)
+        : String(graphqlData ?? '');
       return {
-        mimeType: contentType,
-        text: JSON.stringify(body[mode])
+        mimeType: contentType || 'application/json',
+        text
       };
-    default:
+    }
+    case 'json': {
+      const jsonData = body[mode];
+      let text = '';
+      if (typeof jsonData === 'object' && jsonData !== null) {
+        text = JSON.stringify(jsonData, null, 2);
+      } else {
+        text = String(jsonData ?? '');
+      }
       return {
-        mimeType: contentType,
-        text: body[mode] as string
+        mimeType: contentType || 'application/json',
+        text
       };
+    }
+    default: {
+      const rawData = body[mode];
+      return {
+        mimeType: contentType || 'text/plain',
+        text: typeof rawData === 'object' && rawData !== null ? JSON.stringify(rawData) : String(rawData ?? '')
+      };
+    }
   }
 };
 
@@ -186,23 +242,27 @@ interface BuildHarRequestParams {
 }
 
 export const buildHarRequest = ({ request, headers }: BuildHarRequestParams) => {
-  // NOTE:
-  // This is just a safety check.
-  // The interpolateUrlPathParams method validates the url, but it does not throw
-  if (!URL.canParse(request.url)) {
-    throw new Error('invalid request url');
+  const rawUrl = request.url || '';
+  const { hashed: safeUrl, restore: unhash } = patternHasher(rawUrl);
+
+  let urlForHar = safeUrl;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlForHar)) {
+    urlForHar = `http://${urlForHar}`;
   }
 
-  return {
-    method: request.method,
-    url: request.url,
+  const har = {
+    method: request.method || 'GET',
+    url: urlForHar,
     httpVersion: 'HTTP/1.1',
     cookies: [] as unknown[],
     headers: createHeaders(request, headers),
     queryString: createQuery(request.params, request),
-    postData: createPostData(request.body || {}),
+    postData: createPostData(request.body),
     headersSize: 0,
     bodySize: 0,
     binary: true
   };
+
+  return { har, unhash };
 };
+

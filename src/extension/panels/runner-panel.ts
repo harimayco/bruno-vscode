@@ -70,6 +70,10 @@ function handleIpcSend(channel: string, args: unknown[]): void {
     case 'sidebar:open-global-environments':
       vscode.commands.executeCommand('bruno.openGlobalEnvironments');
       break;
+
+    case 'sidebar:open-global-history':
+      vscode.commands.executeCommand('bruno.openGlobalHistory');
+      break;
   }
 }
 

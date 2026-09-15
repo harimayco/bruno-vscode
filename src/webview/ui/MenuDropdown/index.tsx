@@ -126,6 +126,7 @@ const MenuDropdown = forwardRef<MenuDropdownRef, MenuDropdownProps & Record<stri
       onChangeCallback?.(newState);
     } else {
       setInternalIsOpen(newState);
+      onChangeCallback?.(newState);
     }
   }, [isControlled, onChangeCallback]);
 

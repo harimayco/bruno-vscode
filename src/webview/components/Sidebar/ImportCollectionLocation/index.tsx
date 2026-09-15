@@ -6,6 +6,7 @@ import get from 'lodash/get';
 import { IconCaretDown } from '@tabler/icons';
 import { browseDirectory } from 'providers/ReduxStore/slices/collections/actions';
 import { postmanToBruno } from 'utils/importers/postman-collection';
+import { convertPostmanDumpToBruno } from 'utils/importers/postman-backup';
 import { convertInsomniaToBruno } from 'utils/importers/insomnia-collection';
 import { convertOpenapiToBruno } from 'utils/importers/openapi-collection';
 import { processBrunoCollection } from 'utils/importers/bruno-collection';
@@ -22,6 +23,11 @@ const getCollectionName = (format: any, rawData: any) => {
   if (!rawData) return 'Collection';
 
   switch (format) {
+    case 'postman-backup': {
+      const colCount = Array.isArray(rawData?.collections) ? rawData.collections.length : 0;
+      const envCount = Array.isArray(rawData?.environments) ? rawData.environments.length : 0;
+      return `${colCount} Collections & ${envCount} Environments`;
+    }
     case 'openapi':
       return rawData.info?.title || 'OpenAPI Collection';
     case 'postman':
@@ -132,6 +138,11 @@ const ImportCollectionLocation = ({
     onSubmit: async (values) => {
       if (isZipImport) {
         handleSubmit(rawData, values.collectionLocation, { format: collectionFormat, isZipImport: true });
+      } else if (format === 'postman-backup') {
+        const { collections } = convertPostmanDumpToBruno(rawData);
+        for (const col of collections) {
+          handleSubmit(col, values.collectionLocation, { format: collectionFormat });
+        }
       } else {
         const convertedCollection = await convertCollection(format, rawData, groupingType);
         handleSubmit(convertedCollection, values.collectionLocation, { format: collectionFormat });

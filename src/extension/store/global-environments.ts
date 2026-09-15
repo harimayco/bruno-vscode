@@ -181,6 +181,18 @@ class GlobalEnvironmentsStore {
     }
     this.setGlobalEnvironments(globalEnvironments);
   }
+
+  deleteGlobalEnvironments({ environmentUids }: { environmentUids: string[] }): void {
+    if (!Array.isArray(environmentUids) || !environmentUids.length) return;
+    let globalEnvironments = this.getGlobalEnvironments();
+    const activeGlobalEnvironmentUid = this.getActiveGlobalEnvironmentUid();
+    const uidSet = new Set(environmentUids);
+    globalEnvironments = globalEnvironments.filter((env) => !uidSet.has(env?.uid));
+    if (activeGlobalEnvironmentUid && uidSet.has(activeGlobalEnvironmentUid)) {
+      this.setActiveGlobalEnvironmentUid(null);
+    }
+    this.setGlobalEnvironments(globalEnvironments);
+  }
 }
 
 export const globalEnvironmentsStore = new GlobalEnvironmentsStore();

@@ -132,7 +132,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText }:
     if (isItemAFolder(item)) {
       return clientY < folderUpperThreshold ? 'adjacent' : 'inside';
     } else {
-      return clientY < fileUpperThreshold ? 'adjacent' : null;
+      return 'adjacent';
     }
   };
 

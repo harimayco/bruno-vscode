@@ -202,6 +202,11 @@ export const generateUidBasedOnHash = (str: string): string => {
 
 export const stringifyIfNot = (v: unknown): string => typeof v === 'string' ? v : String(v);
 
+export const decodeVariableBraces = (str: string | null | undefined): string => {
+  if (!str || typeof str !== 'string') return str || '';
+  return str.replace(/%7B%7B/gi, '{{').replace(/%7D%7D/gi, '}}');
+};
+
 export const getEncoding = (headers: Record<string, string> | null | undefined): string | undefined => {
   // Parse the charset from content type: https://stackoverflow.com/a/33192813
   const charsetMatch = /charset=([^()<>@,;:"/[\]?.=\s]*)/i.exec(headers?.['content-type'] || '');
@@ -296,20 +301,26 @@ export const formatResponse = (
   filter: string | null | undefined,
   bufferThreshold = LARGE_BUFFER_THRESHOLD
 ): string => {
-  if (data === undefined || !dataBufferString || !mode) {
+  if (data === undefined && !dataBufferString) {
     return '';
   }
 
+  const effectiveMode = mode || 'json';
+
   let bufferSize = 0, rawData = '', isVeryLargeResponse = false;
-  try {
-    const dataBuffer = Buffer.from(dataBufferString, 'base64');
-    bufferSize = dataBuffer.length;
-    isVeryLargeResponse = bufferSize > bufferThreshold;
-    if (!isVeryLargeResponse) {
-      rawData = dataBuffer.toString();
+  if (dataBufferString) {
+    try {
+      const dataBuffer = Buffer.from(dataBufferString, 'base64');
+      bufferSize = dataBuffer.length;
+      isVeryLargeResponse = bufferSize > bufferThreshold;
+      if (!isVeryLargeResponse) {
+        rawData = dataBuffer.toString();
+      }
+    } catch (error) {
+      console.warn('Failed to calculate buffer size:', error);
     }
-  } catch (error) {
-    console.warn('Failed to calculate buffer size:', error);
+  } else if (data !== undefined && data !== null) {
+    rawData = typeof data === 'string' ? data : (safeStringifyJSON(data, true) ?? String(data));
   }
 
   if (mode.includes('json')) {

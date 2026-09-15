@@ -145,10 +145,11 @@ import {
   transformRequestToSaveToFilesystem,
   transformCollectionRootToSave
 } from 'utils/collections';
-import { uuid, waitForNextTick } from 'utils/common';
+import { uuid, waitForNextTick, decodeVariableBraces } from 'utils/common';
 import { cancelNetworkRequest, connectWS, sendGrpcRequest, sendNetworkRequest, sendWsRequest } from 'utils/network/index';
 import { callIpc } from 'utils/common/ipc';
 import brunoClipboard from 'utils/bruno-clipboard';
+import { recordHistoryEntry } from 'providers/ReduxStore/slices/history';
 
 import {
   collectionAddEnvFileEvent as _collectionAddEnvFileEvent,
@@ -158,6 +159,7 @@ import {
   sortCollections as _sortCollections,
   updateCollectionMountStatus,
   moveCollection,
+  updateItemsSequences as _updateItemsSequences,
   requestCancelled,
   resetRunResults,
   responseReceived,
@@ -227,6 +229,9 @@ interface generateUniqueNameProps {
   collectionPathname?: unknown;
   brunoConfig?: unknown;
 }
+
+const isYmlCollection = (collection: any): boolean =>
+  collection?.format === 'yml' || Boolean(collection?.brunoConfig?.opencollection);
 
 // generate a unique names
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -489,7 +494,11 @@ export const saveMultipleCollections = (collectionDrafts: CollectionDraftInfo[])
         const collectionCopy = safeCloneCollection(collection);
         const collectionRootToSave = transformCollectionRootToSave(collectionCopy);
         const { ipcRenderer } = window;
-
+        /* 
+        TODO: Saving brunoConfig in openCollction.yml need to be handled in future. 
+        ** `saveCollectionSettings` has been refactored to save brunoConfig in openCollection.yml. 
+        ** Changes are not done here as the code is not reached in the current flow. 
+        */
         let savePromises = [];
 
         savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
@@ -780,6 +789,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
     } else {
       sendNetworkRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
         .then((response: Record<string, unknown>) => {
+          const reqSent = (response.requestSent as RequestSent | undefined) || itemCopy.request;
           dispatch(
             responseReceived({
               itemUid,
@@ -788,6 +798,47 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               requestSent: response.requestSent as RequestSent | undefined
             })
           );
+          try {
+            const isTransient = Boolean(
+              itemCopy?.isTransient ||
+              (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
+            );
+            const historyUrl = decodeVariableBraces(itemCopy.request?.url || reqSent?.url || '');
+            dispatch(
+              recordHistoryEntry({
+                id: uuid(),
+                timestamp: Date.now(),
+                request: {
+                  url: historyUrl,
+                  method: String(reqSent?.method || itemCopy.request?.method || 'GET').toUpperCase(),
+                  headers: (reqSent?.headers || itemCopy.request?.headers || []) as any,
+                  params: (reqSent?.params || itemCopy.request?.params || []) as any,
+                  body: reqSent?.body || itemCopy.request?.body || { mode: 'none' },
+                  auth: reqSent?.auth || itemCopy.request?.auth || {}
+                },
+                response: {
+                  status: typeof response.status === 'number' ? response.status : undefined,
+                  statusText: String(response.statusText || response.status || ''),
+                  duration: typeof response.duration === 'number' ? response.duration : 0,
+                  size: typeof response.size === 'number' ? response.size : 0,
+                  headers: response.headers as Record<string, unknown> | undefined,
+                  data: response.data,
+                  dataBuffer: typeof response.dataBuffer === 'string' ? response.dataBuffer : undefined,
+                  error: null
+                },
+                source: {
+                  collectionUid: collectionCopy?.uid,
+                  collectionName: collectionCopy?.name,
+                  collectionPath: collectionCopy?.pathname,
+                  itemUid: itemCopy?.uid,
+                  itemName: itemCopy?.name,
+                  itemPath: isTransient ? undefined : itemCopy?.pathname
+                }
+              })
+            );
+          } catch {
+            // Ignore history recording failures
+          }
         })
         .then(() => resolve())
         .catch((err: Error) => {
@@ -817,6 +868,44 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               response: errorResponse
             })
           );
+
+          try {
+            const isTransient = Boolean(
+              itemCopy?.isTransient ||
+              (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
+            );
+            dispatch(
+              recordHistoryEntry({
+                id: uuid(),
+                timestamp: Date.now(),
+                request: {
+                  url: decodeVariableBraces(itemCopy.request?.url || ''),
+                  method: String(itemCopy.request?.method || 'GET').toUpperCase(),
+                  headers: itemCopy.request?.headers || [],
+                  params: itemCopy.request?.params || [],
+                  body: itemCopy.request?.body || { mode: 'none' },
+                  auth: itemCopy.request?.auth || {}
+                },
+                response: {
+                  status: 0,
+                  statusText: 'Error',
+                  duration: 0,
+                  size: 0,
+                  error: err.message ?? 'Something went wrong'
+                },
+                source: {
+                  collectionUid: collectionCopy?.uid,
+                  collectionName: collectionCopy?.name,
+                  collectionPath: collectionCopy?.pathname,
+                  itemUid: itemCopy?.uid,
+                  itemName: itemCopy?.name,
+                  itemPath: isTransient ? undefined : itemCopy?.pathname
+                }
+              })
+            );
+          } catch {
+            // Ignore history recording failures
+          }
         });
     }
   });
@@ -1436,9 +1525,14 @@ export const updateItemsSequences
           return reject(new Error('Collection not found'));
         }
 
-        const { ipcRenderer } = window;
+        dispatch(_updateItemsSequences({ collectionUid, itemsToResequence }));
 
-        ipcRenderer.invoke('renderer:resequence-items', itemsToResequence, collection.pathname).then(resolve).catch(reject);
+        const { ipcRenderer } = window;
+        if (ipcRenderer && ipcRenderer.invoke) {
+          ipcRenderer.invoke('renderer:resequence-items', itemsToResequence, collection.pathname).then(resolve).catch(reject);
+        } else {
+          resolve(true);
+        }
       });
     };
 
@@ -2529,14 +2623,23 @@ export const saveCollectionSettings = (collectionUid: any, brunoConfig: Record<s
 
     const savePromises = [];
 
-    savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
-
     const brunoConfigToSave = brunoConfig || (collectionCopy.draft && collectionCopy.draft.brunoConfig);
-    if (brunoConfigToSave) {
-      // Pass transformed collectionRootToSave instead of collectionCopy.root
-      // For YML format, update-bruno-config also writes to opencollection.yml,
-      // so it needs the transformed root data to avoid overwriting headers/auth/scripts
-      savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
+
+    if (isYmlCollection(collectionCopy)) {
+      savePromises.push(
+        ipcRenderer.invoke(
+          'renderer:save-collection-root',
+          collectionCopy.pathname,
+          collectionRootToSave,
+          brunoConfigToSave || collectionCopy.brunoConfig
+        )
+      );
+    } else {
+      savePromises.push(ipcRenderer.invoke('renderer:save-collection-root', collectionCopy.pathname, collectionRootToSave, collectionCopy.brunoConfig));
+
+      if (brunoConfigToSave) {
+        savePromises.push(ipcRenderer.invoke('renderer:update-bruno-config', brunoConfigToSave, collectionCopy.pathname, collectionRootToSave));
+      }
     }
 
     Promise.all(savePromises)
@@ -2809,6 +2912,28 @@ export const moveCollectionAndPersist
 }: any) =>
     (dispatch: any, getState: any) => {
       dispatch(moveCollection({ draggedItem, targetItem }));
+      try {
+        const state = getState();
+        const activeWorkspaceUid = state.workspaces?.activeWorkspaceUid;
+        const workspace = state.workspaces?.workspaces?.find((w: any) => w.uid === activeWorkspaceUid)
+          || state.workspaces?.workspaces?.find((w: any) => w.type === 'default');
+
+        if (workspace && state.collections?.collections) {
+          const workspaceCollections = state.collections.collections.filter((c: any) =>
+            workspace.collections?.some((wc: any) => normalizePath(wc.path) === normalizePath(c.pathname))
+          );
+          const collectionPaths = workspaceCollections.map((c: any) => c.pathname);
+          const { ipcRenderer } = window;
+          if (ipcRenderer && ipcRenderer.invoke) {
+            ipcRenderer.invoke('renderer:reorder-workspace-collections', {
+              workspacePath: workspace.pathname,
+              collectionPaths
+            }).catch((err: any) => console.error('Failed to persist collection order:', err));
+          }
+        }
+      } catch (err) {
+        console.error('Error in moveCollectionAndPersist:', err);
+      }
       return Promise.resolve();
     };
 

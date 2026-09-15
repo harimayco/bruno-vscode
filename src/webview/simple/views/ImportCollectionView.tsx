@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, forwardRef } from 'react';
+import React, { useRef, useState, useEffect, useMemo, forwardRef } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import toast from 'react-hot-toast';
@@ -6,6 +6,7 @@ import styled from 'styled-components';
 import { IconFileImport, IconFolder, IconCaretDown, IconLoader2 } from '@tabler/icons';
 import jsyaml from 'js-yaml';
 import { isPostmanCollection } from 'utils/importers/postman-collection';
+import { isPostmanBackup, convertPostmanDumpToBruno } from 'utils/importers/postman-backup';
 import { isInsomniaCollection } from 'utils/importers/insomnia-collection';
 import { isOpenApiSpec } from 'utils/importers/openapi-collection';
 import { isWSDLCollection } from 'utils/importers/wsdl-collection';
@@ -18,7 +19,7 @@ import { processBrunoCollection } from 'utils/importers/bruno-collection';
 import { processOpenCollection } from 'utils/importers/opencollection';
 import { wsdlToBruno } from 'utils/importers/wsdl-collection';
 import { toastError, formatIpcError } from 'utils/common/error';
-import { multiLineMsg } from 'utils/common';
+import { multiLineMsg, uuid } from 'utils/common';
 import { ipcRenderer } from 'utils/ipc';
 import Help from 'components/Help';
 import Dropdown from 'components/Dropdown';
@@ -32,16 +33,21 @@ import { useBootstrap, getDefaultLocation } from '../data-hooks';
 
 const StyledWrapper = styled.div`
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   background-color: var(--vscode-editor-background, ${(props: any) => props.theme?.bg || '#1e1e1e'});
   color: var(--vscode-foreground, ${(props: any) => props.theme?.text || '#cccccc'});
   font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 13px;
-  padding: 24px 32px;
+  padding: 24px 32px 32px 32px;
 
   .import-collection-container {
     max-width: 520px;
     margin: 0 auto;
+    padding-bottom: 24px;
   }
 
   .import-collection-header {
@@ -245,9 +251,14 @@ const StyledWrapper = styled.div`
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-    margin-top: 8px;
+    margin-top: 12px;
     padding-top: 16px;
+    padding-bottom: 8px;
     border-top: 1px solid var(--vscode-widget-border, ${(props: any) => props.theme?.input?.border || '#454545'});
+    position: sticky;
+    bottom: 0;
+    background-color: var(--vscode-editor-background, ${(props: any) => props.theme?.bg || '#1e1e1e'});
+    z-index: 10;
   }
 
   .btn {
@@ -324,6 +335,7 @@ const LOADING_MESSAGES = [
 ];
 
 const FORMAT_LABELS: Record<string, string> = {
+  'postman-backup': 'Postman Backup (Multi-collection & Environments)',
   openapi: 'OpenAPI / Swagger',
   postman: 'Postman',
   insomnia: 'Insomnia',
@@ -355,13 +367,18 @@ const convertFileToObject = async (file: File) => {
     }
     return parsed;
   } catch {
-    throw new Error('Failed to parse the file \u2013 ensure it is valid JSON or YAML');
+    throw new Error('Failed to parse the file – ensure it is valid JSON or YAML');
   }
 };
 
 const getCollectionName = (format: string, rawData: any): string => {
   if (!rawData) return 'Collection';
   switch (format) {
+    case 'postman-backup': {
+      const colCount = Array.isArray(rawData?.collections) ? rawData.collections.length : 0;
+      const envCount = Array.isArray(rawData?.environments) ? rawData.environments.length : 0;
+      return `${colCount} Collections & ${envCount} Environments`;
+    }
     case 'openapi':
       return rawData.info?.title || 'OpenAPI Collection';
     case 'postman':
@@ -419,11 +436,27 @@ const ImportCollectionView: React.FC = () => {
   const [detectedFormat, setDetectedFormat] = useState<string>('');
   const [groupingType, setGroupingType] = useState('tags');
   const [collectionFormat, setCollectionFormat] = useState('yml');
+  const [importToGlobalEnv, setImportToGlobalEnv] = useState(true);
+  const [importToCollectionEnv, setImportToCollectionEnv] = useState(false);
 
   const bootstrap = useBootstrap();
   const defaultLocation = getDefaultLocation(bootstrap);
 
   const collectionName = getCollectionName(detectedFormat, rawData);
+
+  const detectedCollections = useMemo(() => {
+    if (!Array.isArray(rawData?.collections)) return [];
+    return [...rawData.collections].sort((a: any, b: any) =>
+      (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [rawData]);
+
+  const detectedEnvironments = useMemo(() => {
+    if (!Array.isArray(rawData?.environments)) return [];
+    return [...rawData.environments].sort((a: any, b: any) =>
+      (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [rawData]);
 
   const formik = useFormik({
     enableReinitialize: true,
@@ -440,6 +473,47 @@ const ImportCollectionView: React.FC = () => {
       try {
         if (detectedFormat === 'bruno-zip') {
           await importCollectionFromZip(rawData.zipFilePath, values.collectionLocation);
+        } else if (detectedFormat === 'postman-backup') {
+          const { collections, environments } = convertPostmanDumpToBruno(rawData);
+
+          // 1. Import environments to Global Environments if enabled
+          if (importToGlobalEnv && environments.length > 0) {
+            for (const env of environments) {
+              try {
+                await ipcRenderer.invoke('renderer:create-global-environment', {
+                  uid: env.uid || uuid(),
+                  name: env.name,
+                  variables: env.variables
+                });
+              } catch (err) {
+                console.error(`Failed to create global environment ${env.name}:`, err);
+              }
+            }
+          }
+
+          // 2. Import collections
+          let importedCollections = 0;
+          const failedCollections: string[] = [];
+          for (const col of collections) {
+            try {
+              if (!importToCollectionEnv) {
+                col.environments = [];
+              }
+              await importCollection(col, values.collectionLocation, collectionFormat);
+              importedCollections++;
+            } catch (err: any) {
+              console.error(`Failed to import collection "${col.name}":`, err);
+              failedCollections.push(col.name || 'Untitled');
+            }
+          }
+
+          if (failedCollections.length === 0) {
+            toast.success(`Successfully imported ${importedCollections} collection(s) and ${environments.length} environment(s)`);
+          } else {
+            toast.error(`Imported ${importedCollections} collection(s). Failed: ${failedCollections.join(', ')}`);
+          }
+          ipcRenderer.send('import-collection:close');
+          return;
         } else {
           const convertedCollection = await convertCollection(detectedFormat, rawData, groupingType);
           await importCollection(convertedCollection, values.collectionLocation, collectionFormat);
@@ -504,7 +578,8 @@ const ImportCollectionView: React.FC = () => {
       if (!data) throw new Error('Failed to parse file content');
 
       let type: string | null = null;
-      if (isOpenApiSpec(data)) type = 'openapi';
+      if (isPostmanBackup(data)) type = 'postman-backup';
+      else if (isOpenApiSpec(data)) type = 'openapi';
       else if (isWSDLCollection(data)) type = 'wsdl';
       else if (isPostmanCollection(data)) type = 'postman';
       else if (isInsomniaCollection(data)) type = 'insomnia';
@@ -670,6 +745,75 @@ const ImportCollectionView: React.FC = () => {
               {FORMAT_LABELS[detectedFormat] || detectedFormat}
             </span>
           </div>
+
+          {detectedFormat === 'postman-backup' && rawData && (
+            <div className="form-group">
+              <label className="form-label">Contents Detected</label>
+              <div style={{ padding: '10px 12px', background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.05))', borderRadius: 4, fontSize: 12 }}>
+                <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                  Collections ({detectedCollections.length}):
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  maxHeight: 110,
+                  overflowY: 'auto',
+                  padding: '2px 0',
+                  marginBottom: (detectedEnvironments.length ? 10 : 0)
+                }}>
+                  {detectedCollections.map((c: any, idx: number) => (
+                    <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
+                      {c.name || 'Untitled'}
+                    </span>
+                  ))}
+                </div>
+                {detectedEnvironments.length > 0 && (
+                  <>
+                    <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                      Environments ({detectedEnvironments.length}):
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 6,
+                      maxHeight: 110,
+                      overflowY: 'auto',
+                      padding: '2px 0',
+                      marginBottom: 10
+                    }}>
+                      {detectedEnvironments.map((e: any, idx: number) => (
+                        <span key={idx} style={{ padding: '2px 8px', borderRadius: 3, background: 'var(--vscode-badge-background, #333)', color: 'var(--vscode-badge-foreground, #fff)' }}>
+                          {e.name || 'Untitled'}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.1))', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={importToGlobalEnv}
+                          onChange={(e) => setImportToGlobalEnv(e.target.checked)}
+                          disabled={isImporting}
+                        />
+                        <span>Import environments to <strong>Global Environments</strong> (shared across workspace)</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={importToCollectionEnv}
+                          onChange={(e) => setImportToCollectionEnv(e.target.checked)}
+                          disabled={isImporting}
+                        />
+                        <span>Also create environment files inside each collection folder</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="collectionLocation" className="form-label">

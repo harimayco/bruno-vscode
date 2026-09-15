@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import usePrevious from 'hooks/usePrevious';
 import EnvironmentDetails from './EnvironmentDetails';
 import CreateEnvironment from 'components/Environments/EnvironmentSettings/CreateEnvironment';
-import { IconDownload, IconUpload, IconSearch, IconPlus, IconCheck, IconX } from '@tabler/icons';
+import { IconDownload, IconUpload, IconSearch, IconPlus, IconCheck, IconX, IconTrash } from '@tabler/icons';
 import StyledWrapper from './StyledWrapper';
 import ConfirmSwitchEnv from 'components/Environments/ConfirmSwitchEnv';
 import ImportEnvironmentModal from 'components/Environments/Common/ImportEnvironmentModal';
+import Modal from 'components/Modal/index';
+import Portal from 'components/Portal/index';
 import { isEqual } from 'lodash';
 import { useDispatch } from 'react-redux';
-import { addEnvironment, renameEnvironment, selectEnvironment } from 'providers/ReduxStore/slices/collections/actions';
-import { addGlobalEnvironment, renameGlobalEnvironment, selectGlobalEnvironment } from 'providers/ReduxStore/slices/global-environments';
+import { addEnvironment, renameEnvironment, selectEnvironment, deleteEnvironment } from 'providers/ReduxStore/slices/collections/actions';
+import { addGlobalEnvironment, renameGlobalEnvironment, selectGlobalEnvironment, deleteGlobalEnvironment, deleteGlobalEnvironments } from 'providers/ReduxStore/slices/global-environments';
 import { validateName, validateNameError } from 'utils/common/regex';
 import toast from 'react-hot-toast';
 
@@ -46,6 +48,10 @@ const EnvironmentList = ({
   const [renamingEnvUid, setRenamingEnvUid] = useState<string | null>(null);
   const [newEnvName, setNewEnvName] = useState('');
   const [envNameError, setEnvNameError] = useState('');
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedEnvUids, setSelectedEnvUids] = useState<string[]>([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const renameContainerRef = useRef<HTMLDivElement>(null);
   const createContainerRef = useRef<HTMLDivElement>(null);
@@ -303,14 +309,110 @@ const EnvironmentList = ({
     }
   };
 
-  const filteredEnvironments
-    = environments?.filter((env: any) => env.name.toLowerCase().includes(searchText.toLowerCase())) || [];
+  const toggleBulkMode = () => {
+    if (isBulkMode) {
+      setIsBulkMode(false);
+      setSelectedEnvUids([]);
+    } else {
+      setIsBulkMode(true);
+      setSelectedEnvUids([]);
+    }
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedEnvUids(filteredEnvironments.map((env: any) => env.uid));
+    } else {
+      setSelectedEnvUids([]);
+    }
+  };
+
+  const toggleSelectEnv = (envUid: string) => {
+    setSelectedEnvUids((prev) =>
+      prev.includes(envUid) ? prev.filter((id) => id !== envUid) : [...prev, envUid]
+    );
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    const uidsToDelete = [...selectedEnvUids];
+    if (!uidsToDelete.length) return;
+
+    setIsBulkDeleting(true);
+    try {
+      if (isGlobal) {
+        await (dispatch(deleteGlobalEnvironments({ environmentUids: uidsToDelete }) as any));
+      } else {
+        await Promise.all(
+          uidsToDelete.map((envUid) => dispatch(deleteEnvironment(envUid, collection.uid) as any))
+        );
+      }
+      toast.success(`${uidsToDelete.length} environment(s) deleted successfully`);
+      setSelectedEnvUids([]);
+      setIsBulkMode(false);
+      setShowBulkDeleteConfirm(false);
+    } catch (err) {
+      toast.error('An error occurred while deleting environments');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const sortedEnvironments = useMemo(() => {
+    if (!environments || !Array.isArray(environments)) return [];
+    return [...environments].sort((a: any, b: any) =>
+      (a?.name || '').localeCompare(b?.name || '', undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [environments]);
+
+  const filteredEnvironments = useMemo(() => {
+    return sortedEnvironments.filter((env: any) =>
+      env.name.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [sortedEnvironments, searchText]);
+
+  const selectedEnvNames = useMemo(() => {
+    return (environments || [])
+      .filter((env: any) => selectedEnvUids.includes(env.uid))
+      .map((env: any) => env.name || 'Untitled');
+  }, [environments, selectedEnvUids]);
 
   return (
     <StyledWrapper>
       {openCreateModal && <CreateEnvironment collection={collection} onClose={() => setOpenCreateModal(false)} />}
       {openImportModal && (
         <ImportEnvironmentModal type={isGlobal ? 'global' : 'collection'} collection={collection} onClose={() => setOpenImportModal(false)} />
+      )}
+
+      {showBulkDeleteConfirm && (
+        <Portal>
+          <Modal
+            size="sm"
+            title="Delete Environments"
+            confirmText={isBulkDeleting ? 'Deleting...' : `Delete (${selectedEnvUids.length})`}
+            handleConfirm={handleConfirmBulkDelete}
+            handleCancel={() => !isBulkDeleting && setShowBulkDeleteConfirm(false)}
+            confirmButtonColor="danger"
+            disableConfirm={isBulkDeleting}
+          >
+            <div>
+              <p style={{ marginBottom: 10 }}>
+                Are you sure you want to delete <strong>{selectedEnvUids.length}</strong> selected environment(s)? This action cannot be undone.
+              </p>
+              <div style={{
+                maxHeight: 140,
+                overflowY: 'auto',
+                background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.05))',
+                padding: '8px 12px',
+                borderRadius: 4,
+                fontSize: 12
+              }}>
+                {selectedEnvNames.map((name: string, i: number) => (
+                  <div key={i} style={{ padding: '2px 0' }}>• {name}</div>
+                ))}
+              </div>
+            </div>
+          </Modal>
+        </Portal>
       )}
 
       <div className="environments-container">
@@ -324,14 +426,22 @@ const EnvironmentList = ({
           <div className="sidebar-header">
             <h2 className="title">Environments</h2>
             <div className="flex items-center gap-2">
-              <button className="btn-action" onClick={() => handleCreateEnvClick()} title="Create environment">
+              <button className="btn-action" onClick={() => handleCreateEnvClick()} title="Create environment" disabled={isBulkMode}>
                 <IconPlus size={16} strokeWidth={1.5} />
               </button>
-              <button className="btn-action" onClick={() => handleImportClick()} title="Import environment">
+              <button className="btn-action" onClick={() => handleImportClick()} title="Import environment" disabled={isBulkMode}>
                 <IconDownload size={16} strokeWidth={1.5} />
               </button>
-              <button className="btn-action" onClick={() => handleExportClick()} title="Export environment">
+              <button className="btn-action" onClick={() => handleExportClick()} title="Export environment" disabled={isBulkMode}>
                 <IconUpload size={16} strokeWidth={1.5} />
+              </button>
+              <button
+                className={`btn-action ${isBulkMode ? 'active' : ''}`}
+                onClick={toggleBulkMode}
+                title={isBulkMode ? 'Exit selection mode' : 'Bulk delete environments'}
+                style={isBulkMode ? { color: 'var(--vscode-errorForeground, #f14c4c)' } : {}}
+              >
+                <IconTrash size={16} strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -347,14 +457,86 @@ const EnvironmentList = ({
             />
           </div>
 
+          {isBulkMode && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 12px',
+              margin: '0 8px 6px 8px',
+              background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.06))',
+              borderRadius: 4,
+              fontSize: 12
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={filteredEnvironments.length > 0 && selectedEnvUids.length === filteredEnvironments.length}
+                  onChange={handleSelectAll}
+                />
+                <span>Select All ({selectedEnvUids.length})</span>
+              </label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  disabled={selectedEnvUids.length === 0}
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  style={{
+                    padding: '2px 8px',
+                    background: selectedEnvUids.length > 0 ? 'var(--vscode-errorForeground, #f14c4c)' : 'transparent',
+                    color: selectedEnvUids.length > 0 ? '#ffffff' : 'var(--vscode-disabledForeground, #666)',
+                    border: 'none',
+                    borderRadius: 3,
+                    cursor: selectedEnvUids.length > 0 ? 'pointer' : 'not-allowed',
+                    fontSize: 11,
+                    fontWeight: 500
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => {
+                    setIsBulkMode(false);
+                    setSelectedEnvUids([]);
+                  }}
+                  style={{
+                    padding: '2px 8px',
+                    background: 'transparent',
+                    color: 'var(--vscode-foreground, #cccccc)',
+                    border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.2))',
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    fontSize: 11
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="environments-list">
             {filteredEnvironments.map((env: any) => <div
               key={env.uid}
               id={env.uid}
-              className={`environment-item ${selectedEnvironment.uid === env.uid ? 'active' : ''} ${renamingEnvUid === env.uid ? 'renaming' : ''} ${activeEnvironmentUid === env.uid ? 'activated' : ''}`}
-              onClick={() => renamingEnvUid !== env.uid && handleEnvironmentClick(env)}
-              onDoubleClick={() => handleEnvironmentDoubleClick(env)}
+              className={`environment-item ${selectedEnvironment?.uid === env.uid ? 'active' : ''} ${renamingEnvUid === env.uid ? 'renaming' : ''} ${activeEnvironmentUid === env.uid ? 'activated' : ''}`}
+              onClick={() => {
+                if (isBulkMode) {
+                  toggleSelectEnv(env.uid);
+                } else if (renamingEnvUid !== env.uid) {
+                  handleEnvironmentClick(env);
+                }
+              }}
+              onDoubleClick={() => !isBulkMode && handleEnvironmentDoubleClick(env)}
             >
+              {isBulkMode && (
+                <input
+                  type="checkbox"
+                  checked={selectedEnvUids.includes(env.uid)}
+                  onChange={() => toggleSelectEnv(env.uid)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ marginRight: 8, cursor: 'pointer' }}
+                />
+              )}
               {renamingEnvUid === env.uid ? (
                 <div className="rename-container" ref={renameContainerRef}>
                   <input
@@ -391,21 +573,23 @@ const EnvironmentList = ({
               ) : (
                 <>
                   <span className="environment-name">{env.name}</span>
-                  <div className="environment-actions">
-                    {activeEnvironmentUid === env.uid ? (
-                      <div className="activated-checkmark" title="Active environment">
-                        <IconCheck size={16} strokeWidth={2} />
-                      </div>
-                    ) : (
-                      <button
-                        className="activate-btn"
-                        onClick={(e) => handleActivateEnvironment(e, env)}
-                        title="Activate environment"
-                      >
-                        <IconCheck size={16} strokeWidth={2} />
-                      </button>
-                    )}
-                  </div>
+                  {!isBulkMode && (
+                    <div className="environment-actions">
+                      {activeEnvironmentUid === env.uid ? (
+                        <div className="activated-checkmark" title="Active environment">
+                          <IconCheck size={16} strokeWidth={2} />
+                        </div>
+                      ) : (
+                        <button
+                          className="activate-btn"
+                          onClick={(e) => handleActivateEnvironment(e, env)}
+                          title="Activate environment"
+                        >
+                          <IconCheck size={16} strokeWidth={2} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>)}

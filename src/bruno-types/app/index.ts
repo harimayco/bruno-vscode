@@ -43,7 +43,11 @@ export type {
   CollectionDraft,
   EnvironmentsDraft,
   SecurityConfig,
-  OAuth2CredentialEntry
+  OAuth2CredentialEntry,
+  HistoryEntry,
+  HistoryEntryRequest,
+  HistoryEntryResponse,
+  HistoryEntrySource
 } from './collection-ext';
 
 export type {

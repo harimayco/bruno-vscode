@@ -1,4 +1,3 @@
-import React from 'react';
 // @ts-expect-error - httpsnippet types are incomplete, targets export not properly typed
 import { targets } from 'httpsnippet';
 
@@ -29,14 +28,14 @@ export const getLanguages = (): Language[] => {
             client: clients[0]
           }]
         : clients.map((client) => ({
-            name: `${title}-${client}`,
+            name: `${title} - ${client}`,
             target: key,
             client
           }));
     allLanguages.push(...languages);
 
-    // Move "Shell-curl" to the top of the array
-    const shellCurlIndex = allLanguages.findIndex((lang) => lang.name === 'Shell-curl');
+    // Move "Shell - curl" to the top of the array
+    const shellCurlIndex = allLanguages.findIndex((lang) => lang.name === 'Shell - curl' || lang.name === 'Shell-curl');
     if (shellCurlIndex !== -1) {
       const [shellCurl] = allLanguages.splice(shellCurlIndex, 1);
       allLanguages.unshift(shellCurl);
@@ -45,3 +44,4 @@ export const getLanguages = (): Language[] => {
 
   return allLanguages;
 };
+

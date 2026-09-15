@@ -229,6 +229,11 @@
         "category": "Bruno"
       },
       {
+        "command": "bruno.openGlobalHistory",
+        "title": "Open Global History",
+        "category": "Bruno"
+      },
+      {
         "command": "bruno.openEnvironmentSettings",
         "title": "Open Environment Settings",
         "category": "Bruno"
@@ -395,7 +400,19 @@
         "mac": "cmd+s",
         "when": "activeWebviewPanelId == 'bruno.transientRequest'"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Bruno",
+      "properties": {
+        "bruno.history.maxItems": {
+          "type": "number",
+          "default": 500,
+          "minimum": 10,
+          "maximum": 5000,
+          "description": "Maximum number of global history entries to store."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
