@@ -22,6 +22,7 @@ import { decodeVariableBraces } from 'utils/common';
 import MenuDropdown from 'ui/MenuDropdown';
 import HistoryDetailsModal from './HistoryDetailsModal';
 import SaveToCollectionModal from './SaveToCollectionModal';
+import { normalizeHistoryHeaders, normalizeHistoryParams } from './utils';
 
 interface HistoryItemProps {
   entry: HistoryEntry;
@@ -80,8 +81,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
       request: {
         url: decodedUrl,
         method: entry.request.method,
-        headers: Array.isArray(entry.request.headers) ? entry.request.headers : [],
-        params: entry.request.params || [],
+        headers: normalizeHistoryHeaders(entry.request.headers),
+        params: normalizeHistoryParams(entry.request.params),
         body: entry.request.body || { mode: 'none' },
         auth: entry.request.auth || {}
       }
@@ -102,7 +103,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
           timestamp: Date.now(),
           request: {
             ...entry.request,
-            url: decodedUrl
+            url: decodedUrl,
+            headers: response.requestSent?.headers || tempItem.request.headers
           },
           response: {
             status: typeof response.status === 'number' ? response.status : undefined,
@@ -111,6 +113,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
             size: typeof response.size === 'number' ? response.size : 0,
             headers: response.headers as any,
             data: response.data,
+            dataBuffer: typeof response.dataBuffer === 'string' ? response.dataBuffer : undefined,
             error: null
           }
         }) as any
@@ -137,15 +140,21 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
     // Deterministic UID linked to this history entry so clicking it again reveals the existing unsaved tab
     const itemUid = `history-${entry.id}`;
     transientItem.uid = itemUid;
+    if (entry.source?.itemName) {
+      transientItem.name = entry.source.itemName;
+    }
 
     // Load exact snapshot data from history
     transientItem.request = {
       ...transientItem.request,
       url: decodedUrl,
       method: entry.request?.method || 'GET',
-      headers: Array.isArray(entry.request?.headers) ? entry.request.headers : [],
-      params: entry.request?.params || [],
-      body: entry.request?.body || { mode: 'none' },
+      headers: normalizeHistoryHeaders(entry.request?.headers),
+      params: normalizeHistoryParams(entry.request?.params),
+      body: {
+        ...(transientItem.request?.body || {}),
+        ...(entry.request?.body || {})
+      },
       auth: entry.request?.auth || {}
     };
 
@@ -193,10 +202,10 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {
           url: decodedUrl,
           method: entry.request.method,
           body: entry.request.body,
-          params: entry.request.params as any,
+          params: normalizeHistoryParams(entry.request.params) as any,
           auth: entry.request.auth
         },
-        headers: (Array.isArray(entry.request.headers) ? entry.request.headers : []) as any
+        headers: normalizeHistoryHeaders(entry.request.headers) as any
       });
       const snippet = new HTTPSnippet(har);
       const code = unhash ? unhash(snippet.convert('shell', 'curl') as string) : (snippet.convert('shell', 'curl') as string);

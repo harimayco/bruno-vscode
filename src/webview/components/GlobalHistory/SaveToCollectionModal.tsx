@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { newHttpRequest } from 'providers/ReduxStore/slices/collections/actions';
 import { decodeVariableBraces } from 'utils/common';
 import toast from 'react-hot-toast';
+import { normalizeHistoryHeaders } from './utils';
 
 const StyledModalContent = styled.div`
   display: flex;
@@ -82,7 +83,7 @@ const SaveToCollectionModal: React.FC<SaveToCollectionModalProps> = ({ entry, on
           requestMethod: entry.request.method,
           collectionUid: selectedCollectionUid,
           itemUid: null,
-          headers: Array.isArray(entry.request.headers) ? entry.request.headers : [],
+          headers: normalizeHistoryHeaders(entry.request.headers),
           body: entry.request.body || { mode: 'none' }
         }) as any
       );

@@ -46,12 +46,12 @@ describe('Postman Backup Importer', () => {
         folders: [],
         requests: [
           {
-            id: 'c5db8d37-b9cf-4ece-b047-33dab7617f64',
-            name: 'https://nettixflow.com/api/nettixflow/session/lease',
-            url: 'https://nettixflow.com/api/nettixflow/session/lease',
+            id: 'c5xx8d37-bxxf-4ece-b047-3xxab7xx7f64',
+            name: 'https://xxx.com/api/xxx/session/lease',
+            url: 'https://xxx.com/api/xxx/session/lease',
             method: 'POST',
             dataMode: 'raw',
-            rawModeData: '{"device_id":"nf-ultra-0ccd08b2"}',
+            rawModeData: '{"device_id":"nf-xxxx-avxxx8xx"}',
             headerData: [
               { key: 'content-type', value: 'application/json', enabled: true }
             ],

@@ -7,6 +7,7 @@ import { IconCopy, IconCheck } from '@tabler/icons';
 import { buildHarRequest } from 'utils/codegenerator/har';
 import { HTTPSnippet } from 'httpsnippet';
 import { decodeVariableBraces } from 'utils/common';
+import { normalizeHistoryHeaders, normalizeHistoryParams } from './utils';
 
 const StyledModalContent = styled.div`
   display: flex;
@@ -125,10 +126,10 @@ const HistoryDetailsModal: React.FC<HistoryDetailsModalProps> = ({ entry, onClos
           url: entry.request.url,
           method: entry.request.method,
           body: entry.request.body,
-          params: entry.request.params as any,
+          params: normalizeHistoryParams(entry.request.params) as any,
           auth: entry.request.auth
         },
-        headers: (Array.isArray(entry.request.headers) ? entry.request.headers : []) as any
+        headers: normalizeHistoryHeaders(entry.request.headers) as any
       });
       const snippet = new HTTPSnippet(har);
       const code = unhash ? unhash(snippet.convert('shell', 'curl') as string) : (snippet.convert('shell', 'curl') as string);
@@ -153,9 +154,7 @@ const HistoryDetailsModal: React.FC<HistoryDetailsModalProps> = ({ entry, onClos
     return String(data);
   };
 
-  const headersList = Array.isArray(entry.request.headers)
-    ? entry.request.headers
-    : Object.entries(entry.request.headers || {}).map(([name, value]) => ({ name, value }));
+  const headersList = normalizeHistoryHeaders(entry.request.headers);
 
   return (
     <Modal
