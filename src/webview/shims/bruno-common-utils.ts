@@ -96,8 +96,11 @@ export function buildQueryString(paramsArray: QueryParam[], { encode = false }: 
     .filter(({ name }) => typeof name === 'string' && name.trim().length > 0)
     .map(({ name, value }) => {
       const finalName = encode ? encodeURIComponent(name) : name;
-      const finalValue = encode ? encodeURIComponent(value ?? '') : (value ?? '');
-      return finalValue ? `${finalName}=${finalValue}` : finalName;
+      if (value === undefined) {
+        return finalName;
+      }
+      const finalValue = encode ? encodeURIComponent(value) : value;
+      return `${finalName}=${finalValue}`;
     })
     .join('&');
 }
@@ -118,9 +121,15 @@ export function parseQueryParams(query: string, { decode = false }: ExtractQuery
         return null;
       }
 
+      const hasEqualsSign = pair.includes('=');
+      const rawValue = hasEqualsSign ? valueParts.join('=') : undefined;
+      const value = hasEqualsSign
+        ? (decode ? decodeURIComponent(rawValue ?? '') : rawValue)
+        : undefined;
+
       return {
         name: decode ? decodeURIComponent(name) : name,
-        value: decode ? decodeURIComponent(valueParts.join('=')) : valueParts.join('=')
+        value
       };
     }).filter((param): param is NonNullable<typeof param> => param !== null);
 
