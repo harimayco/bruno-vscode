@@ -29,11 +29,11 @@ import { registerGrpcEventHandlers } from './grpc-event-handlers';
 import { utils as brunoUtilsRaw } from '@usebruno/common';
 import type { NetworkLogEntry, RequestSent, ResponseTimeline } from '@bruno-types';
 import qs from 'qs';
+import { encodeUrl } from '../../utils/url';
 
 // Type assertion for @usebruno/common utils (no type definitions available)
 const brunoUtils = brunoUtilsRaw as {
   buildFormUrlEncodedPayload: (fields: Array<{ name: string; value: string; enabled?: boolean }>) => string;
-  encodeUrl: (url: string) => string;
 };
 
 const getJsSandboxRuntime = (collection: Record<string, unknown>): string => {
@@ -311,7 +311,7 @@ const executeRequest = async (
     }
 
     if (interpolatedRequest.settings?.encodeUrl) {
-      interpolatedRequest.url = brunoUtils.encodeUrl(interpolatedRequest.url);
+      interpolatedRequest.url = encodeUrl(interpolatedRequest.url);
     }
 
     const protocolRegex = /^([-+\w]{1,25})(:?\/\/|:)/;
