@@ -735,7 +735,8 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
 
     let collectionCopy = safeCloneCollection(collection);
 
-    const itemCopy = safeCloneItem(item);
+    const currentItem = findItemInCollection(collection, itemUid) || item;
+    const itemCopy = safeCloneItem(currentItem);
 
     const globalEnvironmentVariables = getGlobalEnvironmentVariables({
       globalEnvironments,
@@ -789,7 +790,8 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
     } else {
       sendNetworkRequest(itemCopy, collectionCopy, environment, collectionCopy.runtimeVariables)
         .then((response: Record<string, unknown>) => {
-          const reqSent = (response.requestSent as RequestSent | undefined) || itemCopy.request;
+          const activeRequest = itemCopy.draft?.request || itemCopy.request || {};
+          const reqSent = (response.requestSent as RequestSent | undefined) || activeRequest;
           dispatch(
             responseReceived({
               itemUid,
@@ -803,18 +805,18 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               itemCopy?.isTransient ||
               (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
             );
-            const historyUrl = decodeVariableBraces(itemCopy.request?.url || reqSent?.url || '');
+            const historyUrl = decodeVariableBraces(activeRequest.url || reqSent?.url || '');
             dispatch(
               recordHistoryEntry({
                 id: uuid(),
                 timestamp: Date.now(),
                 request: {
                   url: historyUrl,
-                  method: String(reqSent?.method || itemCopy.request?.method || 'GET').toUpperCase(),
-                  headers: (reqSent?.headers || itemCopy.request?.headers || []) as any,
-                  params: (reqSent?.params || itemCopy.request?.params || []) as any,
-                  body: reqSent?.body || itemCopy.request?.body || { mode: 'none' },
-                  auth: reqSent?.auth || itemCopy.request?.auth || {}
+                  method: String(activeRequest.method || reqSent?.method || 'GET').toUpperCase(),
+                  headers: (reqSent?.headers || activeRequest.headers || []) as any,
+                  params: (activeRequest.params || reqSent?.params || []) as any,
+                  body: activeRequest.body || reqSent?.body || { mode: 'none' },
+                  auth: activeRequest.auth || reqSent?.auth || {}
                 },
                 response: {
                   status: typeof response.status === 'number' ? response.status : undefined,
@@ -831,7 +833,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
                   collectionName: collectionCopy?.name,
                   collectionPath: collectionCopy?.pathname,
                   itemUid: itemCopy?.uid,
-                  itemName: itemCopy?.name,
+                  itemName: itemCopy?.draft?.name || itemCopy?.name,
                   itemPath: isTransient ? undefined : itemCopy?.pathname
                 }
               })
@@ -850,7 +852,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
                 response: null
               })
             );
-            return;
+            return resolve();
           }
 
           const errorResponse = {
@@ -874,17 +876,18 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
               itemCopy?.isTransient ||
               (itemCopy?.pathname && (itemCopy.pathname.includes('.bruno/transient') || itemCopy.pathname.includes('.bruno\\transient')))
             );
+            const activeRequest = itemCopy.draft?.request || itemCopy.request || {};
             dispatch(
               recordHistoryEntry({
                 id: uuid(),
                 timestamp: Date.now(),
                 request: {
-                  url: decodeVariableBraces(itemCopy.request?.url || ''),
-                  method: String(itemCopy.request?.method || 'GET').toUpperCase(),
-                  headers: itemCopy.request?.headers || [],
-                  params: itemCopy.request?.params || [],
-                  body: itemCopy.request?.body || { mode: 'none' },
-                  auth: itemCopy.request?.auth || {}
+                  url: decodeVariableBraces(activeRequest.url || ''),
+                  method: String(activeRequest.method || 'GET').toUpperCase(),
+                  headers: activeRequest.headers || [],
+                  params: activeRequest.params || [],
+                  body: activeRequest.body || { mode: 'none' },
+                  auth: activeRequest.auth || {}
                 },
                 response: {
                   status: 0,
@@ -898,7 +901,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
                   collectionName: collectionCopy?.name,
                   collectionPath: collectionCopy?.pathname,
                   itemUid: itemCopy?.uid,
-                  itemName: itemCopy?.name,
+                  itemName: itemCopy?.draft?.name || itemCopy?.name,
                   itemPath: isTransient ? undefined : itemCopy?.pathname
                 }
               })
@@ -906,6 +909,7 @@ export const sendRequest = (item: AppItem, collectionUid: string): ThunkAction<P
           } catch {
             // Ignore history recording failures
           }
+          resolve();
         });
     }
   });
